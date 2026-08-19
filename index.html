@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>桌卡製作工具 v11｜可編輯 DOCX 測試版</title>
+  <title>桌卡製作工具</title>
   <style>
     :root {
       --bg: #eef6ff;
@@ -909,7 +909,7 @@
   }
 
 
-  // ===== 可編輯 Word (.docx) 測試匯出 =====
+  // ===== 可編輯 Word (.docx) 匯出（v14：上半部圖文統一 DrawingML，文字固定在最前層） =====
   // 直接在瀏覽器端建立 Office Open XML (.docx)。
   // 每個文字欄位都以 Word 的 VML 文字方塊輸出，因此在 Word 內仍可直接修改文字；
   // 底圖、Logo 與文字方塊使用相同的 A4 絕對座標，避免舊版 HTML .doc 被 Word 重新排版。
@@ -945,19 +945,34 @@
     let size = clamp(Math.round(Number(field.size) || 38), layout.minSize, 160);
     const canvas = getTextFitForWord.canvas || (getTextFitForWord.canvas = document.createElement('canvas'));
     const ctx = canvas.getContext('2d');
-    if (!ctx || !text) return { size, wrap: false };
+    if (!ctx || !text) return { size, wrap: false, textWidth: 0 };
     const setFont = () => { ctx.font = `700 ${size}px ${fontStack(field.fontFamily)}`; };
     setFont();
+    let measured = ctx.measureText(String(text)).width;
     let guard = 180;
-    while (ctx.measureText(String(text)).width > layout.boxWidth + 1 && size > layout.minSize && guard-- > 0) {
+    while (measured > layout.boxWidth + 1 && size > layout.minSize && guard-- > 0) {
       size -= 1;
       setFont();
+      measured = ctx.measureText(String(text)).width;
     }
-    const stillWide = ctx.measureText(String(text)).width > layout.boxWidth + 1;
-    return { size, wrap: Boolean(stillWide && layout.allowWrap) };
+    const stillWide = measured > layout.boxWidth + 1;
+    return { size, wrap: Boolean(stillWide && layout.allowWrap), textWidth: measured };
   }
 
-  function textBoxXml(id, x, y, w, h, field, key, rotation=0) {
+  // Word 對舊式 VML 文字方塊的 w:jc 置中支援並不一致。
+  // 因此單行文字會直接依實際字寬算出段落左縮排，
+  // 讓靠左／置中／靠右在 Microsoft Word 裡都有可預期的位置。
+  function wordIndentTwips(fit, boxWidth, align) {
+    if (!fit || fit.wrap) return 0;
+    const textWidth = Math.max(0, Number(fit.textWidth) || 0);
+    const spare = Math.max(0, Number(boxWidth) - textWidth);
+    let indentPx = 0;
+    if (align === 'center') indentPx = spare / 2;
+    else if (align === 'right') indentPx = spare;
+    return Math.max(0, Math.round(pxToPt(indentPx) * 20));
+  }
+
+  function textBoxXml(id, x, y, w, h, field, key) {
     const fit = getTextFitForWord(field.text || '', key, field);
     const fontPx = fit.size;
     const fontHalfPoints = Math.max(2, Math.round(fontPx * DOCX_PX_TO_PT * 2));
@@ -965,12 +980,14 @@
     const color = String(field.color || '#000000').replace('#','').toUpperCase();
     const font = wordFontName(field.fontFamily);
     const align = wordAlign(field.align, FIELD_LAYOUT[key].defaultAlign);
+    const indentTwips = wordIndentTwips(fit, w, align);
+    const indentXml = indentTwips ? `<w:ind w:left="${indentTwips}"/>` : '';
     return `<w:r><w:pict>
-      <v:shape id="TextBox${id}" type="#_x0000_t202" style="${shapeStyle(x,y,w,h,rotation,5)};v-text-anchor:middle" stroked="f" filled="f" o:allowincell="f">
+      <v:shape id="TextBox${id}" type="#_x0000_t202" style="${shapeStyle(x,y,w,h,0,5)};v-text-anchor:middle" stroked="f" filled="f" o:allowincell="f">
         <v:textbox inset="0,0,0,0" style="mso-fit-shape-to-text:f">
           <w:txbxContent>
             <w:p>
-              <w:pPr><w:jc w:val="${align}"/><w:spacing w:before="0" w:after="0" w:line="${lineTwips}" w:lineRule="exact"/></w:pPr>
+              <w:pPr><w:jc w:val="left"/>${indentXml}<w:spacing w:before="0" w:after="0" w:line="${lineTwips}" w:lineRule="exact"/></w:pPr>
               <w:r><w:rPr><w:rFonts w:ascii="${xmlEscape(font)}" w:hAnsi="${xmlEscape(font)}" w:eastAsia="${xmlEscape(font)}"/><w:b/><w:color w:val="${color}"/><w:sz w:val="${fontHalfPoints}"/><w:szCs w:val="${fontHalfPoints}"/></w:rPr><w:t xml:space="preserve">${xmlEscape(field.text || '')}</w:t></w:r>
             </w:p>
           </w:txbxContent>
@@ -980,6 +997,64 @@
     </w:pict></w:r>`;
   }
 
+  // Word 對 VML 文字框的 180° 文字旋轉支援不一致。
+  // 上半部改用 Office 2010+ WordprocessingShape (DrawingML/WPS)。
+  // a:xfrm 的 rot 單位是 1/60000 度；180° = 10800000。
+  // wps:bodyPr 不指定 rot，讓文字跟隨 shape 一起旋轉，仍保持 Word 內可編輯。
+  function drawingTextBoxXml(docPrId, x, y, w, h, field, key, rotationDeg=180, relativeHeight=1000) {
+    const fit = getTextFitForWord(field.text || '', key, field);
+    const fontPx = fit.size;
+    const fontHalfPoints = Math.max(2, Math.round(fontPx * DOCX_PX_TO_PT * 2));
+    const lineTwips = Math.max(20, Math.round(fontPx * DOCX_PX_TO_PT * 20 * (fit.wrap ? 1.04 : 1.08)));
+    const color = String(field.color || '#000000').replace('#','').toUpperCase();
+    const font = wordFontName(field.fontFamily);
+    const align = wordAlign(field.align, FIELD_LAYOUT[key].defaultAlign);
+    const indentTwips = wordIndentTwips(fit, w, align);
+    const indentXml = indentTwips ? `<w:ind w:left="${indentTwips}"/>` : '';
+
+    const emuPerPt = 12700;
+    const toEmu = px => Math.round(pxToPt(px) * emuPerPt);
+    const xEmu = toEmu(x), yEmu = toEmu(y), wEmu = Math.max(1, toEmu(w)), hEmu = Math.max(1, toEmu(h));
+    const rot = Math.round(Number(rotationDeg || 0) * 60000);
+    const rotAttr = rot ? ` rot="${rot}"` : '';
+
+    return `<w:r><w:drawing>
+      <wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="${Math.max(1000, Math.round(Number(relativeHeight) || 1000))}" behindDoc="0" locked="0" layoutInCell="0" allowOverlap="1">
+        <wp:simplePos x="0" y="0"/>
+        <wp:positionH relativeFrom="page"><wp:posOffset>${xEmu}</wp:posOffset></wp:positionH>
+        <wp:positionV relativeFrom="page"><wp:posOffset>${yEmu}</wp:posOffset></wp:positionV>
+        <wp:extent cx="${wEmu}" cy="${hEmu}"/>
+        <wp:effectExtent l="0" t="0" r="0" b="0"/>
+        <wp:wrapNone/>
+        <wp:docPr id="${docPrId}" name="Rotated Text Box ${docPrId}"/>
+        <wp:cNvGraphicFramePr/>
+        <a:graphic>
+          <a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+            <wps:wsp>
+              <wps:cNvSpPr txBox="1"/>
+              <wps:spPr>
+                <a:xfrm${rotAttr}><a:off x="0" y="0"/><a:ext cx="${wEmu}" cy="${hEmu}"/></a:xfrm>
+                <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+                <a:noFill/><a:ln><a:noFill/></a:ln>
+              </wps:spPr>
+              <wps:txbx>
+                <w:txbxContent>
+                  <w:p>
+                    <w:pPr><w:jc w:val="left"/>${indentXml}<w:spacing w:before="0" w:after="0" w:line="${lineTwips}" w:lineRule="exact"/></w:pPr>
+                    <w:r><w:rPr><w:rFonts w:ascii="${xmlEscape(font)}" w:hAnsi="${xmlEscape(font)}" w:eastAsia="${xmlEscape(font)}"/><w:b/><w:color w:val="${color}"/><w:sz w:val="${fontHalfPoints}"/><w:szCs w:val="${fontHalfPoints}"/></w:rPr><w:t xml:space="preserve">${xmlEscape(field.text || '')}</w:t></w:r>
+                  </w:p>
+                </w:txbxContent>
+              </wps:txbx>
+              <wps:bodyPr lIns="0" tIns="0" rIns="0" bIns="0" anchor="ctr">
+                <a:prstTxWarp prst="textNoShape"><a:avLst/></a:prstTxWarp><a:noAutofit/>
+              </wps:bodyPr>
+            </wps:wsp>
+          </a:graphicData>
+        </a:graphic>
+      </wp:anchor>
+    </w:drawing></w:r>`;
+  }
+
   function imageShapeXml(id, relId, x, y, w, h, rotation=0, z=1) {
     return `<w:r><w:pict>
       <v:shape id="Image${id}" type="#_x0000_t75" style="${shapeStyle(x,y,w,h,rotation,z)}" stroked="f" filled="f" o:allowincell="f">
@@ -987,6 +1062,50 @@
         <w10:wrap type="none"/>
       </v:shape>
     </w:pict></w:r>`;
+  }
+
+  // 上半部圖片也改用 DrawingML，與旋轉文字方塊使用同一套浮動物件層級。
+  // relativeHeight 數值越大越靠前：底圖 10、Logo 20、文字 1000 以上。
+  // 這可避免 Word 將舊式 VML 圖片蓋在 WPS 旋轉文字方塊上。
+  function drawingImageXml(docPrId, relId, x, y, w, h, rotationDeg=0, relativeHeight=10, name='Image') {
+    const emuPerPt = 12700;
+    const toEmu = px => Math.round(pxToPt(px) * emuPerPt);
+    const xEmu = toEmu(x), yEmu = toEmu(y), wEmu = Math.max(1, toEmu(w)), hEmu = Math.max(1, toEmu(h));
+    const rot = Math.round(Number(rotationDeg || 0) * 60000);
+    const rotAttr = rot ? ` rot="${rot}"` : '';
+    const safeHeight = Math.max(0, Math.round(Number(relativeHeight) || 0));
+
+    return `<w:r><w:drawing>
+      <wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="${safeHeight}" behindDoc="0" locked="0" layoutInCell="0" allowOverlap="1">
+        <wp:simplePos x="0" y="0"/>
+        <wp:positionH relativeFrom="page"><wp:posOffset>${xEmu}</wp:posOffset></wp:positionH>
+        <wp:positionV relativeFrom="page"><wp:posOffset>${yEmu}</wp:posOffset></wp:positionV>
+        <wp:extent cx="${wEmu}" cy="${hEmu}"/>
+        <wp:effectExtent l="0" t="0" r="0" b="0"/>
+        <wp:wrapNone/>
+        <wp:docPr id="${docPrId}" name="${xmlEscape(name)} ${docPrId}"/>
+        <wp:cNvGraphicFramePr/>
+        <a:graphic>
+          <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+            <pic:pic>
+              <pic:nvPicPr>
+                <pic:cNvPr id="${docPrId}" name="${xmlEscape(name)} ${docPrId}"/>
+                <pic:cNvPicPr/>
+              </pic:nvPicPr>
+              <pic:blipFill>
+                <a:blip r:embed="${relId}"/>
+                <a:stretch><a:fillRect/></a:stretch>
+              </pic:blipFill>
+              <pic:spPr>
+                <a:xfrm${rotAttr}><a:off x="0" y="0"/><a:ext cx="${wEmu}" cy="${hEmu}"/></a:xfrm>
+                <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+                <a:noFill/><a:ln><a:noFill/></a:ln>
+              </pic:spPr>
+            </pic:pic>
+          </a:graphicData>
+        </a:graphic>
+      </wp:anchor>
+    </w:drawing></w:r>`;
   }
 
   function guideRectXml(id, x, y, w, thickness=1, color='444444') {
@@ -1090,8 +1209,14 @@
       const g = wordImageGeometry(def.img, def.kind);
       const bottom = normalInBottomFace(g.x, g.y);
       const top = mirrorInTopFace(g.x, g.y, g.w, g.h);
+
+      // 下半部沿用已驗證正常的 VML 圖片。
       xml += imageShapeXml(nextId(), def.relId, bottom.x, bottom.y, g.w, g.h, 0, def.z);
-      xml += imageShapeXml(nextId(), def.relId, top.x, top.y, g.w, g.h, 180, def.z);
+
+      // 上半部改用 DrawingML 圖片；底圖與 Logo 均放在旋轉文字的後層。
+      const topImageId = (pageIndex + 1) * 10000 + idCounter.value++;
+      const topLayer = def.kind === 'background' ? 10 : 20;
+      xml += drawingImageXml(topImageId, def.relId, top.x, top.y, g.w, g.h, 180, topLayer, def.kind === 'background' ? 'Background' : 'Logo');
     });
 
     ['event','title','name'].forEach(key => {
@@ -1099,8 +1224,9 @@
       const g = wordTextGeometry(key, f);
       const bottom = normalInBottomFace(g.x, g.y);
       const top = mirrorInTopFace(g.x, g.y, g.w, g.h);
-      xml += textBoxXml(nextId(), bottom.x, bottom.y, g.w, g.h, {...f, size:g.field.size}, key, 0);
-      xml += textBoxXml(nextId(), top.x, top.y, g.w, g.h, {...f, size:g.field.size}, key, 180);
+      xml += textBoxXml(nextId(), bottom.x, bottom.y, g.w, g.h, {...f, size:g.field.size}, key);
+      const topShapeId = (pageIndex + 1) * 10000 + idCounter.value++;
+      xml += drawingTextBoxXml(topShapeId, top.x, top.y, g.w, g.h, {...f, size:g.field.size}, key, 180, 1000 + ({event:10,title:20,name:30}[key] || 0));
     });
 
     if (state.showGuide) {
@@ -1121,7 +1247,7 @@
       return `<w:p><w:pPr>${pageBreakBefore}<w:spacing w:before="0" w:after="0" w:line="1" w:lineRule="exact"/></w:pPr>${types}${shapes}</w:p>`;
     }).join('');
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w10="urn:schemas-microsoft-com:office:word">
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
   <w:body>${paras}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="0" w:right="0" w:bottom="0" w:left="0" w:header="0" w:footer="0" w:gutter="0"/><w:docGrid w:linePitch="1"/></w:sectPr></w:body>
 </w:document>`;
   }
