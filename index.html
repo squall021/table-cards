@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>桌卡製作工具 v11｜可編輯 DOCX 測試版</title>
+  <style>
+    :root {
+      --bg: #eef6ff;
+      --panel: #ffffff;
+      --line: #cfe4f7;
+      --primary: #2b78c5;
+      --primary-dark: #174a78;
+      --text: #18324a;
+      --muted: #6b8195;
+      --danger: #c33d3d;
+      --shadow: 0 12px 35px rgba(33, 76, 117, .13);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; font-family: "Microsoft JhengHei", "Noto Sans TC", Arial, sans-serif; color: var(--text); background: var(--bg); }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    .app { min-height: 100vh; display: grid; grid-template-columns: minmax(520px, 700px) 1fr; }
+    .controls { background: rgba(255,255,255,.97); border-right: 1px solid var(--line); height: 100vh; overflow: auto; box-shadow: var(--shadow); z-index: 5; }
+    .header { position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,.96); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); padding: 20px 24px 16px; }
+    .header h1 { margin: 0 0 5px; font-size: 22px; }
+    .header p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .tabs { display: flex; gap: 8px; margin-top: 14px; }
+    .tab { border: 1px solid var(--line); background: #f6fbff; color: var(--primary-dark); border-radius: 12px; padding: 9px 14px; font-weight: 700; }
+    .tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+    .body { padding: 18px 24px 100px; }
+    .section { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin-bottom: 14px; box-shadow: 0 5px 15px rgba(29,87,137,.04); }
+    .section-title { font-weight: 800; color: var(--primary-dark); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .section-title small { font-weight: 500; color: var(--muted); }
+    .text-editor { border: 1px solid #dbeaf7; border-radius: 14px; padding: 13px; background: #fbfdff; margin-top: 10px; }
+    .text-editor:first-child { margin-top: 0; }
+    .text-editor-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
+    .text-editor-head strong { font-size: 15px; color: #153e62; }
+    .text-input { width: 100%; border: 1px solid #bad7ee; border-radius: 10px; padding: 10px 12px; outline: none; background: white; }
+    .text-input:focus, .number-input:focus, .hex-input:focus, select:focus { border-color: #5aa0dc; box-shadow: 0 0 0 3px rgba(90,160,220,.13); }
+    .row { display: grid; grid-template-columns: 92px minmax(110px, 1fr) 146px; align-items: center; gap: 9px; margin-top: 9px; }
+    .row > label { font-size: 12px; font-weight: 700; color: #46667f; }
+    input[type="range"] { width: 100%; accent-color: var(--primary); }
+    .number-input, .hex-input, select { width: 100%; border: 1px solid #bad7ee; border-radius: 9px; padding: 7px 8px; background: white; outline: none; }
+    .number-input { text-align: center; min-width: 0; }
+    /* 隱藏瀏覽器原生 number 上下微調箭頭，保留左右自訂 − / ＋ 按鈕 */
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type="number"] {
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+    .color-wrap { display: grid; grid-template-columns: 42px 1fr; gap: 7px; }
+    input[type="color"] { width: 42px; height: 34px; border: 1px solid #bad7ee; border-radius: 8px; background: white; padding: 2px; cursor: pointer; }
+    .nudge { display: grid; grid-template-columns: 34px minmax(68px, 1fr) 34px; gap: 5px; }
+    .nudge button { border: 1px solid #bad7ee; background: #fff; border-radius: 8px; font-weight: 800; color: var(--primary-dark); }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .control-label { font-size: 12px; font-weight: 700; color: #46667f; margin-bottom: 5px; display: block; }
+    .checkline { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .checkline label { display: flex; gap: 6px; align-items: center; font-size: 13px; font-weight: 700; }
+    .filebox { border: 1px dashed #9fc6e5; background: #f7fbff; border-radius: 12px; padding: 10px; }
+    .filebox input { width: 100%; }
+    .btn { border: 0; border-radius: 12px; padding: 10px 14px; font-weight: 800; transition: .15s ease; }
+    .btn:hover { transform: translateY(-1px); }
+    .btn.primary { background: var(--primary); color: #fff; }
+    .btn.secondary { background: #edf6fd; color: var(--primary-dark); border: 1px solid #b9d8ef; }
+    .btn.danger { background: #fff0f0; color: var(--danger); border: 1px solid #efc4c4; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+    .batch-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .batch-table-wrap { overflow: auto; max-height: 260px; border: 1px solid var(--line); border-radius: 12px; }
+    table { border-collapse: collapse; width: 100%; font-size: 12px; }
+    th, td { border-bottom: 1px solid #e4eef6; padding: 8px 9px; text-align: left; white-space: nowrap; }
+    th { position: sticky; top: 0; background: #eef7ff; color: #27577d; z-index: 2; }
+    tr.active { background: #eaf5ff; }
+    tr[data-row] { cursor: pointer; }
+    .batch-editable { cursor: text; transition: background .12s ease, box-shadow .12s ease; }
+    .batch-editable:hover { background: #f4faff; box-shadow: inset 0 0 0 1px #d5e9f8; }
+    .batch-editable.edited { background: #fff9dc; }
+    .batch-cell-input { width: 100%; min-width: 110px; border: 1px solid #5aa0dc; border-radius: 6px; padding: 5px 7px; outline: none; background: #fff; box-shadow: 0 0 0 3px rgba(90,160,220,.13); color: var(--text); }
+    .footer-actions { position: sticky; bottom: 0; z-index: 30; background: rgba(255,255,255,.97); border-top: 1px solid var(--line); padding: 13px 24px; display: flex; gap: 9px; box-shadow: 0 -8px 22px rgba(30,80,120,.08); }
+    .preview-area { height: 100vh; overflow: auto; display: flex; justify-content: center; align-items: flex-start; padding: 34px; background-image: radial-gradient(#bed8eb 1.4px, transparent 1.4px); background-size: 22px 22px; }
+    .preview-shell { width: min(100%, 920px); display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .preview-info { align-self: stretch; display: flex; justify-content: space-between; gap: 10px; align-items: center; background: rgba(255,255,255,.9); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; backdrop-filter: blur(8px); }
+    .zoomline { display: flex; gap: 8px; align-items: center; }
+    .zoomline input { width: 180px; }
+    .page-stage { width: 100%; display: flex; justify-content: center; overflow: auto; padding: 6px 0 50px; }
+    .page-scale { transform-origin: top center; }
+    .a4-page { width: 794px; height: 1123px; background: white; position: relative; box-shadow: 0 18px 60px rgba(26,60,90,.24); overflow: hidden; }
+    .face { position: absolute; left: 22px; width: 750px; height: 480px; background: #fff; overflow: hidden; }
+    .background-layer { position: absolute; left: 50%; top: 50%; height: auto; max-width: none; pointer-events: none; user-select: none; z-index: 0; }
+    .logo-layer { position: absolute; left: 50%; top: 50%; height: auto; max-width: none; pointer-events: none; user-select: none; z-index: 3; }
+    .face.top { top: 70px; transform: rotate(180deg); transform-origin: center; }
+    .face.bottom { top: 573px; }
+    .text-layer { position: absolute; left: 50%; top: 50%; transform-origin: center; white-space: nowrap; line-height: 1.08; font-weight: 700; text-align: center; z-index: 5; }
+    .fold-line { position: absolute; left: 22px; right: 22px; top: 561px; border-top: 1px solid #444; }
+    .cut-line { position: absolute; left: 8px; right: 8px; border-top: 1px solid #111; }
+    .cut-line.top { top: 54px; }
+    .cut-line.bottom { top: 1069px; }
+    .hint { font-size: 12px; color: var(--muted); line-height: 1.55; margin-top: 8px; }
+    .status { font-size: 12px; color: var(--muted); }
+    .toast { position: fixed; right: 24px; bottom: 24px; z-index: 9999; padding: 12px 16px; color: white; background: #245b83; border-radius: 12px; box-shadow: var(--shadow); max-width: 340px; }
+    .toast.error { background: #a63f3f; }
+    .hidden { display: none !important; }
+    @media (max-width: 1180px) {
+      .app { grid-template-columns: 520px 1fr; }
+      .grid-3 { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 900px) {
+      .app { display: block; }
+      .controls { height: auto; overflow: visible; border-right: 0; }
+      .preview-area { height: auto; min-height: 800px; padding: 20px 10px; }
+      .footer-actions { position: sticky; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <aside class="controls">
+    <div class="header">
+      <h1>桌卡製作工具</h1>
+      <p>活動名稱、職稱、姓名可分別調整字型、對齊方式、X / Y 位置、大小與文字顏色；底圖與 Logo 也可自由調整大小及位置。</p>
+      <div class="tabs">
+        <button class="tab active" data-mode="single">單筆製作</button>
+        <button class="tab" data-mode="batch">大量匯入</button>
+      </div>
+    </div>
+
+    <div class="body">
+      <section class="section" id="singleSection">
+        <div class="section-title"><span id="editorTitle">內容與文字設定</span> <small id="editorNote">三欄完全獨立</small></div>
+        <div id="editors"></div>
+      </section>
+
+      <section class="section hidden" id="batchSection">
+        <div class="section-title">大量匯入 <small id="batchCount">0 筆</small></div>
+        <div class="batch-tools">
+          <button class="btn secondary" id="downloadTemplate">下載 Excel 範本</button>
+          <label class="btn secondary" style="display:inline-block;">
+            匯入 Excel / CSV
+            <input id="batchFile" type="file" accept=".xlsx,.xls,.csv" class="hidden" />
+          </label>
+          <button class="btn danger" id="clearBatch">清空名單</button>
+        </div>
+        <div class="hint">Excel 欄位依序為：活動名稱、職稱、姓名。匯入後點選任一列，下面的「內容與文字設定」會切換成該筆資料；也可以<strong>雙擊名單中的活動名稱、職稱或姓名直接修改</strong>。Enter 儲存、Esc 取消，點到其他地方會自動儲存。</div>
+        <div class="batch-table-wrap" style="margin-top:10px;">
+          <table>
+            <thead><tr><th>#</th><th>活動名稱</th><th>職稱</th><th>姓名</th></tr></thead>
+            <tbody id="batchBody"><tr><td colspan="4" style="text-align:center;color:#789;">尚未匯入</td></tr></tbody>
+          </table>
+        </div>
+        <div class="batch-tools" style="margin-top:10px;margin-bottom:0;">
+          <button class="btn secondary" id="applyBatchStyleAll">將目前這筆文字設定套用到全部</button>
+        </div>
+        <div class="hint">只會套用字型、大小、顏色、對齊方式與 X / Y 位置，不會覆蓋其他人的活動名稱、職稱與姓名。</div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">版面設定</div>
+        <div class="checkline">
+          <label><input id="showGuide" type="checkbox" checked /> 顯示裁切 / 摺線</label>
+        </div>
+
+        <div class="filebox" style="margin-top:12px;">
+          <label class="control-label">單面背景底圖（選填）</label>
+          <input id="backgroundFile" type="file" accept="image/*" />
+          <div class="hint">底圖會同步套用到上下兩面。可調整縮放與 X / Y 位置，適合對準公司既有桌卡模板。</div>
+          <div class="row">
+            <label>底圖大小</label>
+            <input id="backgroundScaleRange" type="range" min="20" max="250" value="100" />
+            <div class="nudge"><button class="layout-nudge" data-target="backgroundScale" data-delta="-1">−</button><input id="backgroundScale" class="number-input" type="number" min="20" max="250" /><button class="layout-nudge" data-target="backgroundScale" data-delta="1">＋</button></div>
+          </div>
+          <div class="row">
+            <label>水平位置 X</label>
+            <input id="backgroundXRange" type="range" min="-350" max="350" value="0" />
+            <div class="nudge"><button class="layout-nudge" data-target="backgroundX" data-delta="-1">−</button><input id="backgroundX" class="number-input" type="number" min="-350" max="350" /><button class="layout-nudge" data-target="backgroundX" data-delta="1">＋</button></div>
+          </div>
+          <div class="row">
+            <label>垂直位置 Y</label>
+            <input id="backgroundYRange" type="range" min="-240" max="240" value="0" />
+            <div class="nudge"><button class="layout-nudge" data-target="backgroundY" data-delta="-1">−</button><input id="backgroundY" class="number-input" type="number" min="-240" max="240" /><button class="layout-nudge" data-target="backgroundY" data-delta="1">＋</button></div>
+          </div>
+          <div class="batch-tools" style="margin-top:10px;margin-bottom:0;">
+            <button class="btn secondary" id="resetBackgroundLayout">重設底圖大小與位置</button>
+            <button class="btn danger" id="clearBackground">移除底圖</button>
+          </div>
+        </div>
+
+        <div class="filebox" style="margin-top:12px;">
+          <label class="control-label">Logo（選填）</label>
+          <input id="logoFile" type="file" accept="image/*" />
+          <div class="hint">Logo 會同步顯示在上下兩面，可獨立調整大小與 X / Y 位置。</div>
+          <div class="row">
+            <label>Logo 大小</label>
+            <input id="logoWidthRange" type="range" min="20" max="320" value="110" />
+            <div class="nudge"><button class="layout-nudge" data-target="logoWidth" data-delta="-1">−</button><input id="logoWidth" class="number-input" type="number" min="20" max="320" /><button class="layout-nudge" data-target="logoWidth" data-delta="1">＋</button></div>
+          </div>
+          <div class="row">
+            <label>水平位置 X</label>
+            <input id="logoXRange" type="range" min="-350" max="350" value="-280" />
+            <div class="nudge"><button class="layout-nudge" data-target="logoX" data-delta="-1">−</button><input id="logoX" class="number-input" type="number" min="-350" max="350" /><button class="layout-nudge" data-target="logoX" data-delta="1">＋</button></div>
+          </div>
+          <div class="row">
+            <label>垂直位置 Y</label>
+            <input id="logoYRange" type="range" min="-240" max="240" value="-190" />
+            <div class="nudge"><button class="layout-nudge" data-target="logoY" data-delta="-1">−</button><input id="logoY" class="number-input" type="number" min="-240" max="240" /><button class="layout-nudge" data-target="logoY" data-delta="1">＋</button></div>
+          </div>
+          <div class="batch-tools" style="margin-top:10px;margin-bottom:0;">
+            <button class="btn secondary" id="resetLogoLayout">重設 Logo 大小與位置</button>
+            <button class="btn danger" id="clearLogo">移除 Logo</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">設定管理</div>
+        <div class="grid-3">
+          <button class="btn secondary" id="saveSettings">儲存目前設定</button>
+          <button class="btn secondary" id="loadSettings">載入已存設定</button>
+          <button class="btn danger" id="resetAll">全部還原</button>
+        </div>
+        <div class="hint">「儲存目前設定」只存在這台瀏覽器的 localStorage；不會上傳到網路。</div>
+      </section>
+    </div>
+
+    <div class="footer-actions">
+      <button class="btn primary" id="exportPdf">下載 PDF</button>
+      <button class="btn secondary" id="exportPng">存成 PNG</button>
+      <button class="btn secondary" id="exportWord">匯出可編輯 Word (.docx)</button>
+      <button class="btn secondary hidden" id="exportBatchPdf">批次 PDF</button>
+      <button class="btn secondary hidden" id="exportBatchZip">批次 ZIP</button>
+      <button class="btn secondary hidden" id="exportBatchWord">批次 Word (.docx)</button>
+    </div>
+  </aside>
+
+  <main class="preview-area">
+    <div class="preview-shell">
+      <div class="preview-info">
+        <div>
+          <strong>列印預覽</strong>
+          <span class="status" id="previewStatus">單筆</span>
+        </div>
+        <div class="zoomline">
+          <label class="status">縮放</label>
+          <input id="zoom" type="range" min="35" max="100" value="68" />
+          <span id="zoomText" class="status">68%</span>
+        </div>
+      </div>
+      <div class="page-stage" id="pageStage">
+        <div class="page-scale" id="pageScale">
+          <div class="a4-page" id="a4Page">
+            <div class="cut-line top guide"></div>
+            <div class="face top" data-face="top"></div>
+            <div class="fold-line guide"></div>
+            <div class="face bottom" data-face="bottom"></div>
+            <div class="cut-line bottom guide"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<div id="toast" class="toast hidden"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+(() => {
+  const BASE_Y = { event: -125, title: -60, name: 70 };
+  const FIELD_META = {
+    event: { label: '活動名稱', defaultText: '' },
+    title: { label: '職稱', defaultText: '' },
+    name:  { label: '姓名', defaultText: '' }
+  };
+  // 固定文字框讓「靠左」時不同長度的內容仍共用同一條字首基準線。
+  // event / title 若太長會先自動縮字，縮到最低字級仍放不下時才允許最多兩行換行。
+  const FIELD_LAYOUT = {
+    event: { boxWidth: 620, minSize: 22, allowWrap: true,  defaultAlign: 'left' },
+    title: { boxWidth: 620, minSize: 24, allowWrap: true,  defaultAlign: 'left' },
+    name:  { boxWidth: 660, minSize: 48, allowWrap: false, defaultAlign: 'center' }
+  };
+  const defaultState = () => ({
+    layoutVersion: 7,
+    mode: 'single',
+    fields: {
+      event: { text: '', fontFamily: 'kai', size: 38, color: '#001b72', align: 'left', x: 0, y: 0 },
+      title: { text: '', fontFamily: 'kai', size: 50, color: '#001b72', align: 'left', x: 0, y: 0 },
+      name:  { text: '', fontFamily: 'kai', size: 108, color: '#a30000', align: 'center', x: 0, y: 0 }
+    },
+    showGuide: true,
+    background: null,
+    backgroundScale: 100,
+    backgroundX: 0,
+    backgroundY: 0,
+    logo: null,
+    logoWidth: 110,
+    logoX: -280,
+    logoY: -190,
+    zoom: 68,
+    batch: [],
+    batchIndex: 0
+  });
+  let state = defaultState();
+  let exporting = false;
+
+  const $ = (id) => document.getElementById(id);
+  const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+  const isHex = (s) => /^#[0-9a-fA-F]{6}$/.test(String(s || ''));
+  const waitFrame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+  function showToast(message, error=false) {
+    const el = $('toast');
+    el.textContent = message;
+    el.className = 'toast' + (error ? ' error' : '');
+    clearTimeout(showToast.t);
+    showToast.t = setTimeout(() => el.classList.add('hidden'), 2800);
+  }
+
+  function fontStack(kind='kai') {
+    if (kind === 'kai') return "'BiauKai','標楷體','DFKai-SB','KaiTi',serif";
+    if (kind === 'serif') return "'PMingLiU','新細明體','Noto Serif TC',serif";
+    return "'Microsoft JhengHei','Noto Sans TC',Arial,sans-serif";
+  }
+
+  function styleFromField(field, key='event') {
+    const layout = FIELD_LAYOUT[key] || FIELD_LAYOUT.event;
+    return {
+      fontFamily: field.fontFamily || 'kai',
+      size: Number(field.size) || 38,
+      color: field.color || '#000000',
+      align: ['left','center','right'].includes(field.align) ? field.align : layout.defaultAlign,
+      x: Number(field.x) || 0,
+      y: Number(field.y) || 0
+    };
+  }
+
+  function ensureBatchStyles(row) {
+    if (!row.styles) row.styles = {};
+    ['event','title','name'].forEach(key => {
+      if (!row.styles[key]) row.styles[key] = styleFromField(state.fields[key], key);
+      row.styles[key] = { ...styleFromField(state.fields[key], key), ...row.styles[key] };
+    });
+    return row.styles;
+  }
+
+  function getActiveField(key) {
+    if (state.mode === 'batch' && state.batch.length) {
+      const row = state.batch[state.batchIndex] || state.batch[0];
+      ensureBatchStyles(row);
+      return { text: row[key] || '', ...row.styles[key] };
+    }
+    return state.fields[key];
+  }
+
+  function setActiveFieldProp(key, prop, value) {
+    if (state.mode === 'batch' && state.batch.length) {
+      const row = state.batch[state.batchIndex] || state.batch[0];
+      ensureBatchStyles(row);
+      if (prop === 'text') row[key] = value;
+      else row.styles[key][prop] = value;
+      return;
+    }
+    state.fields[key][prop] = value;
+  }
+
+  function activeData() {
+    return {
+      event: getActiveField('event').text,
+      title: getActiveField('title').text,
+      name: getActiveField('name').text
+    };
+  }
+
+  function makeFaceContent(face) {
+    face.innerHTML = '';
+
+    if (state.background) {
+      const bg = document.createElement('img');
+      bg.className = 'background-layer';
+      bg.src = state.background;
+      bg.alt = '';
+      bg.style.width = `${clamp(Number(state.backgroundScale) || 100, 20, 250)}%`;
+      bg.style.transform = `translate(-50%, -50%) translate(${Number(state.backgroundX) || 0}px, ${Number(state.backgroundY) || 0}px)`;
+      face.appendChild(bg);
+    }
+
+    if (state.logo) {
+      const logo = document.createElement('img');
+      logo.className = 'logo-layer';
+      logo.src = state.logo;
+      logo.alt = '';
+      logo.style.width = `${clamp(Number(state.logoWidth) || 110, 20, 320)}px`;
+      logo.style.transform = `translate(-50%, -50%) translate(${Number(state.logoX) || 0}px, ${Number(state.logoY) || 0}px)`;
+      face.appendChild(logo);
+    }
+
+    const data = activeData();
+    ['event','title','name'].forEach(key => {
+      const f = getActiveField(key);
+      const layout = FIELD_LAYOUT[key];
+      const layer = document.createElement('div');
+      layer.className = `text-layer layer-${key}`;
+      layer.textContent = data[key] || '';
+      layer.style.fontFamily = fontStack(f.fontFamily);
+      layer.style.fontSize = `${f.size}px`;
+      layer.style.color = f.color;
+      layer.style.width = `${layout.boxWidth}px`;
+      layer.style.textAlign = f.align || layout.defaultAlign;
+      layer.style.whiteSpace = 'nowrap';
+      layer.style.overflow = 'visible';
+      layer.style.transform = `translate(calc(-50% + ${f.x}px), calc(-50% + ${BASE_Y[key] + f.y}px))`;
+      face.appendChild(layer);
+      fitTextLayer(layer, key, Number(f.size) || 38);
+    });
+  }
+
+  function fitTextLayer(layer, key, preferredSize) {
+    const layout = FIELD_LAYOUT[key];
+    if (!layer || !layout || !layer.textContent) return;
+    let size = clamp(Math.round(preferredSize), layout.minSize, 160);
+    layer.style.fontSize = `${size}px`;
+    layer.style.whiteSpace = 'nowrap';
+    layer.style.overflowWrap = 'normal';
+    layer.style.maxHeight = '';
+    layer.style.overflow = 'visible';
+
+    // 逐步縮小至固定文字框內。以 DOM 實際字型寬度判斷，匯出 PDF/PNG 時亦使用同一結果。
+    let guard = 180;
+    while (layer.scrollWidth > layer.clientWidth + 1 && size > layout.minSize && guard-- > 0) {
+      size -= 1;
+      layer.style.fontSize = `${size}px`;
+    }
+
+    // 活動名稱 / 職稱在最低字級仍超寬時，最後才允許換成最多兩行，避免文字跑出邊框。
+    if (layer.scrollWidth > layer.clientWidth + 1 && layout.allowWrap) {
+      layer.style.whiteSpace = 'normal';
+      layer.style.overflowWrap = 'anywhere';
+      layer.style.lineHeight = '1.04';
+      layer.style.maxHeight = '2.12em';
+      layer.style.overflow = 'hidden';
+    }
+  }
+
+  function renderPreview() {
+    document.querySelectorAll('.face').forEach(makeFaceContent);
+    document.querySelectorAll('.guide').forEach(el => el.style.display = state.showGuide ? '' : 'none');
+    $('pageScale').style.transform = `scale(${state.zoom / 100})`;
+    $('pageScale').style.width = `${794 * state.zoom / 100}px`;
+    $('pageScale').style.height = `${1123 * state.zoom / 100}px`;
+    $('zoom').value = state.zoom;
+    $('zoomText').textContent = `${state.zoom}%`;
+    $('previewStatus').textContent = state.mode === 'batch' && state.batch.length ? `大量匯入：${state.batchIndex + 1} / ${state.batch.length}` : '單筆';
+  }
+
+  function editorHtml(key) {
+    const m = FIELD_META[key];
+    return `
+      <div class="text-editor" data-editor="${key}">
+        <div class="text-editor-head"><strong>${m.label}</strong><button class="btn secondary reset-field" data-key="${key}" style="padding:5px 9px;font-size:11px;">還原此欄</button></div>
+        <input class="text-input field-text" data-key="${key}" type="text" />
+        <div class="row">
+          <label>字型</label>
+          <select class="field-font" data-key="${key}">
+            <option value="kai">標楷體 / 楷體</option>
+            <option value="sans">微軟正黑體 / 黑體</option>
+            <option value="serif">新細明體 / 明體</option>
+          </select>
+          <span></span>
+        </div>
+        <div class="row">
+          <label>文字對齊</label>
+          <select class="field-align" data-key="${key}">
+            <option value="left">靠左</option>
+            <option value="center">置中</option>
+            <option value="right">靠右</option>
+          </select>
+          <span></span>
+        </div>
+        <div class="row">
+          <label>文字大小</label>
+          <input class="field-size-range" data-key="${key}" type="range" min="16" max="160" />
+          <input class="number-input field-size" data-key="${key}" type="number" min="16" max="160" />
+        </div>
+        <div class="row">
+          <label>水平位置 X</label>
+          <input class="field-x-range" data-key="${key}" type="range" min="-300" max="300" />
+          <div class="nudge"><button class="nudge-btn" data-key="${key}" data-axis="x" data-delta="-1">−</button><input class="number-input field-x" data-key="${key}" type="number" min="-300" max="300" /><button class="nudge-btn" data-key="${key}" data-axis="x" data-delta="1">＋</button></div>
+        </div>
+        <div class="row">
+          <label>垂直位置 Y</label>
+          <input class="field-y-range" data-key="${key}" type="range" min="-180" max="180" />
+          <div class="nudge"><button class="nudge-btn" data-key="${key}" data-axis="y" data-delta="-1">−</button><input class="number-input field-y" data-key="${key}" type="number" min="-180" max="180" /><button class="nudge-btn" data-key="${key}" data-axis="y" data-delta="1">＋</button></div>
+        </div>
+        <div class="row">
+          <label>文字顏色</label>
+          <div class="color-wrap"><input class="field-color" data-key="${key}" type="color" /><input class="hex-input field-hex" data-key="${key}" maxlength="7" /></div>
+          <span></span>
+        </div>
+        <div class="hint">${key === 'name' ? '姓名預設置中；過長時會自動縮小，避免超出桌卡。' : '使用固定文字框；靠左時可與其他資訊共用字首基準線。文字過長會先自動縮小，必要時才換成兩行。'}</div>
+      </div>`;
+  }
+
+  function buildEditors() {
+    $('editors').innerHTML = ['event','title','name'].map(editorHtml).join('');
+
+    document.querySelectorAll('.field-text').forEach(el => el.addEventListener('input', e => {
+      const key = e.target.dataset.key;
+      setActiveFieldProp(key, 'text', e.target.value);
+      if (state.mode === 'batch') renderBatchTable(false);
+      renderPreview();
+    }));
+    document.querySelectorAll('.field-font').forEach(el => el.addEventListener('change', e => {
+      const key = e.target.dataset.key;
+      setActiveFieldProp(key, 'fontFamily', e.target.value);
+      syncEditor(key);
+      renderPreview();
+    }));
+    document.querySelectorAll('.field-align').forEach(el => el.addEventListener('change', e => {
+      const key = e.target.dataset.key;
+      setActiveFieldProp(key, 'align', e.target.value);
+      syncEditor(key);
+      renderPreview();
+    }));
+    document.querySelectorAll('.field-size-range,.field-size').forEach(el => el.addEventListener('input', e => {
+      const key = e.target.dataset.key;
+      const value = clamp(parseInt(e.target.value || '16', 10), 16, 160);
+      setActiveFieldProp(key, 'size', value);
+      syncEditor(key);
+      renderPreview();
+    }));
+    document.querySelectorAll('.field-x-range,.field-x').forEach(el => el.addEventListener('input', e => {
+      const key = e.target.dataset.key;
+      setActiveFieldProp(key, 'x', clamp(parseInt(e.target.value || '0', 10), -300, 300));
+      syncEditor(key);
+      renderPreview();
+    }));
+    document.querySelectorAll('.field-y-range,.field-y').forEach(el => el.addEventListener('input', e => {
+      const key = e.target.dataset.key;
+      setActiveFieldProp(key, 'y', clamp(parseInt(e.target.value || '0', 10), -180, 180));
+      syncEditor(key);
+      renderPreview();
+    }));
+    document.querySelectorAll('.field-color').forEach(el => el.addEventListener('input', e => {
+      const key = e.target.dataset.key;
+      setActiveFieldProp(key, 'color', e.target.value);
+      syncEditor(key);
+      renderPreview();
+    }));
+    document.querySelectorAll('.field-hex').forEach(el => el.addEventListener('change', e => {
+      const key = e.target.dataset.key;
+      if (!isHex(e.target.value)) {
+        showToast('色碼格式需為 #RRGGBB，例如 #990000', true);
+        syncEditor(key);
+        return;
+      }
+      setActiveFieldProp(key, 'color', e.target.value.toUpperCase());
+      syncEditor(key);
+      renderPreview();
+    }));
+    document.querySelectorAll('.nudge-btn').forEach(btn => btn.addEventListener('click', e => {
+      const { key, axis, delta } = e.currentTarget.dataset;
+      const f = getActiveField(key);
+      const min = axis === 'x' ? -300 : -180;
+      const max = axis === 'x' ? 300 : 180;
+      setActiveFieldProp(key, axis, clamp(Number(f[axis] || 0) + parseInt(delta,10), min, max));
+      syncEditor(key);
+      renderPreview();
+    }));
+    document.querySelectorAll('.reset-field').forEach(btn => btn.addEventListener('click', e => {
+      const key = e.currentTarget.dataset.key;
+      const fresh = defaultState().fields[key];
+      if (state.mode === 'batch' && state.batch.length) {
+        const row = state.batch[state.batchIndex];
+        ensureBatchStyles(row);
+        row.styles[key] = styleFromField(fresh, key);
+      } else {
+        state.fields[key] = { ...fresh };
+      }
+      syncEditor(key);
+      renderPreview();
+    }));
+  }
+
+  function syncEditor(key) {
+    const f = getActiveField(key);
+    const q = (sel) => document.querySelector(`${sel}[data-key="${key}"]`);
+    q('.field-text').value = f.text || '';
+    q('.field-font').value = f.fontFamily || 'kai';
+    q('.field-align').value = f.align || FIELD_LAYOUT[key].defaultAlign;
+    q('.field-size-range').value = f.size;
+    q('.field-size').value = f.size;
+    q('.field-x-range').value = f.x;
+    q('.field-x').value = f.x;
+    q('.field-y-range').value = f.y;
+    q('.field-y').value = f.y;
+    q('.field-color').value = f.color;
+    q('.field-hex').value = String(f.color).toUpperCase();
+  }
+
+  function syncAllEditors() {
+    ['event','title','name'].forEach(syncEditor);
+  }
+
+  function syncLayoutUI() {
+    const values = {
+      backgroundScale: clamp(Number(state.backgroundScale) || 100, 20, 250),
+      backgroundX: clamp(Number(state.backgroundX) || 0, -350, 350),
+      backgroundY: clamp(Number(state.backgroundY) || 0, -240, 240),
+      logoWidth: clamp(Number(state.logoWidth) || 110, 20, 320),
+      logoX: clamp(Number(state.logoX) || 0, -350, 350),
+      logoY: clamp(Number(state.logoY) || 0, -240, 240)
+    };
+    Object.assign(state, values);
+    Object.entries(values).forEach(([key, value]) => {
+      const number = $(key);
+      const range = $(`${key}Range`);
+      if (number) number.value = value;
+      if (range) range.value = value;
+    });
+    $('showGuide').checked = state.showGuide;
+  }
+
+  function syncAllUI() {
+    syncAllEditors();
+    syncLayoutUI();
+    $('zoom').value = state.zoom;
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.mode === state.mode));
+    $('singleSection').classList.remove('hidden');
+    $('editorTitle').textContent = state.mode === 'batch' ? '選取資料：內容與文字設定' : '內容與文字設定';
+    $('editorNote').textContent = state.mode === 'batch' ? (state.batch.length ? `第 ${state.batchIndex + 1} 筆 / ${state.batch.length} 筆` : '請先匯入名單') : '三欄獨立＋固定文字框';
+    $('batchSection').classList.toggle('hidden', state.mode !== 'batch');
+    $('exportPdf').classList.toggle('hidden', state.mode !== 'single');
+    $('exportPng').classList.toggle('hidden', state.mode !== 'single');
+    $('exportWord').classList.toggle('hidden', state.mode !== 'single');
+    $('exportBatchPdf').classList.toggle('hidden', state.mode !== 'batch');
+    $('exportBatchZip').classList.toggle('hidden', state.mode !== 'batch');
+    $('exportBatchWord').classList.toggle('hidden', state.mode !== 'batch');
+    renderBatchTable();
+    renderPreview();
+  }
+
+  function setMode(mode) {
+    state.mode = mode;
+    const body = document.querySelector('.body');
+    const editor = $('singleSection');
+    const batch = $('batchSection');
+    if (mode === 'batch') batch.insertAdjacentElement('afterend', editor);
+    else body.insertBefore(editor, batch);
+    syncAllUI();
+  }
+
+  function renderBatchTable(syncEditors=true) {
+    $('batchCount').textContent = `${state.batch.length} 筆`;
+    const body = $('batchBody');
+    const wrap = body.closest('.batch-table-wrap');
+    const oldScrollTop = wrap ? wrap.scrollTop : 0;
+    const oldScrollLeft = wrap ? wrap.scrollLeft : 0;
+    if (!state.batch.length) {
+      body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#789;">尚未匯入</td></tr>';
+      return;
+    }
+    body.innerHTML = state.batch.map((r,i) => {
+      const edited = r.edited || {};
+      return `<tr data-row="${i}" class="${i===state.batchIndex ? 'active':''}">
+        <td>${i+1}</td>
+        <td class="batch-editable ${edited.event ? 'edited' : ''}" data-field="event" title="雙擊直接修改">${escapeHtml(r.event)}</td>
+        <td class="batch-editable ${edited.title ? 'edited' : ''}" data-field="title" title="雙擊直接修改">${escapeHtml(r.title)}</td>
+        <td class="batch-editable ${edited.name ? 'edited' : ''}" data-field="name" title="雙擊直接修改">${escapeHtml(r.name)}</td>
+      </tr>`;
+    }).join('');
+
+    body.querySelectorAll('tr[data-row]').forEach(tr => tr.addEventListener('click', (e) => {
+      if (e.target.closest('.batch-cell-input')) return;
+      state.batchIndex = parseInt(tr.dataset.row,10);
+      // 不重新建立表格 DOM，避免第一次 click 後元素被替換，導致 dblclick 無法觸發。
+      body.querySelectorAll('tr[data-row]').forEach(row => row.classList.toggle('active', row === tr));
+      syncAllEditors();
+      $('editorNote').textContent = `第 ${state.batchIndex + 1} 筆 / ${state.batch.length} 筆`;
+      renderPreview();
+    }));
+
+    body.querySelectorAll('.batch-editable').forEach(td => td.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      beginBatchCellEdit(td);
+    }));
+
+    if (wrap) {
+      wrap.scrollTop = oldScrollTop;
+      wrap.scrollLeft = oldScrollLeft;
+    }
+    if (syncEditors && state.mode === 'batch') syncAllEditors();
+  }
+
+  function beginBatchCellEdit(td) {
+    if (!td || td.querySelector('input')) return;
+    const tr = td.closest('tr[data-row]');
+    if (!tr) return;
+    const rowIndex = parseInt(tr.dataset.row, 10);
+    const field = td.dataset.field;
+    if (!['event','title','name'].includes(field) || !state.batch[rowIndex]) return;
+
+    state.batchIndex = rowIndex;
+    const oldValue = String(state.batch[rowIndex][field] ?? '');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'batch-cell-input';
+    input.value = oldValue;
+    input.setAttribute('aria-label', `修改${FIELD_META[field].label}`);
+    td.textContent = '';
+    td.appendChild(input);
+    input.focus();
+    input.select();
+
+    let finished = false;
+    const finish = (save) => {
+      if (finished) return;
+      finished = true;
+      if (save) {
+        const newValue = input.value.trim();
+        state.batch[rowIndex][field] = newValue;
+        if (!state.batch[rowIndex].edited) state.batch[rowIndex].edited = {};
+        state.batch[rowIndex].edited[field] = newValue !== oldValue;
+      }
+      renderBatchTable(false);
+      syncAllEditors();
+      $('editorNote').textContent = `第 ${state.batchIndex + 1} 筆 / ${state.batch.length} 筆`;
+      renderPreview();
+      if (save && input.value.trim() !== oldValue) showToast(`${FIELD_META[field].label}已更新`);
+    };
+
+    input.addEventListener('click', e => e.stopPropagation());
+    input.addEventListener('dblclick', e => e.stopPropagation());
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    });
+    input.addEventListener('blur', () => finish(true));
+  }
+
+  function escapeHtml(v) {
+    return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  }
+
+  function downloadTemplate() {
+    if (!window.XLSX) return showToast('Excel 元件尚未載入，請稍後再試', true);
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['活動名稱','職稱','姓名'],
+      ['佛光菁英幹部培訓','中區協會啦啦隊大隊長','謝澤安'],
+      ['佛光菁英幹部培訓','中區協會啦啦隊副隊長','王小明']
+    ]);
+    ws['!cols'] = [{wch:24},{wch:28},{wch:14}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '桌卡名單');
+    XLSX.writeFile(wb, '桌卡名單範本.xlsx');
+  }
+
+  function importBatch(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        if (!window.XLSX) throw new Error('XLSX not loaded');
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        const data = [];
+        rows.forEach((row, idx) => {
+          if (!row || !row.length) return;
+          if (idx === 0 && String(row[0]).includes('活動') && String(row[2]).includes('姓名')) return;
+          const event = String(row[0] ?? '').trim();
+          const title = String(row[1] ?? '').trim();
+          const name = String(row[2] ?? '').trim();
+          if (!event && !title && !name) return;
+          if (!name) return;
+          data.push({ event, title, name, styles: { event: styleFromField(state.fields.event, 'event'), title: styleFromField(state.fields.title, 'title'), name: styleFromField(state.fields.name, 'name') } });
+        });
+        state.batch = data;
+        state.batchIndex = 0;
+        setMode('batch');
+        showToast(`已匯入 ${data.length} 筆`);
+      } catch (err) {
+        console.error(err);
+        showToast('匯入失敗，請確認 Excel / CSV 欄位格式', true);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function loadImage(file, callback, label='圖片', maxMB=8) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return showToast(`請選擇${label}圖片檔`, true);
+    if (file.size > maxMB * 1024 * 1024) return showToast(`${label}請控制在 ${maxMB}MB 以下`, true);
+    const reader = new FileReader();
+    reader.onload = e => callback(e.target.result);
+    reader.readAsDataURL(file);
+  }
+
+  async function capturePage() {
+    if (!window.html2canvas) throw new Error('html2canvas 尚未載入');
+    const scaleWrap = $('pageScale');
+    const oldTransform = scaleWrap.style.transform;
+    const oldWidth = scaleWrap.style.width;
+    const oldHeight = scaleWrap.style.height;
+    scaleWrap.style.transform = 'none';
+    scaleWrap.style.width = '794px';
+    scaleWrap.style.height = '1123px';
+    await waitFrame();
+    const canvas = await html2canvas($('a4Page'), { scale: 3, useCORS: true, backgroundColor: '#ffffff', logging: false });
+    scaleWrap.style.transform = oldTransform;
+    scaleWrap.style.width = oldWidth;
+    scaleWrap.style.height = oldHeight;
+    return canvas;
+  }
+
+  async function exportSinglePDF() {
+    if (exporting) return;
+    exporting = true;
+    try {
+      if (!window.jspdf) throw new Error('jsPDF 尚未載入');
+      const canvas = await capturePage();
+      const pdf = new window.jspdf.jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+      pdf.addImage(canvas.toDataURL('image/jpeg', .96), 'JPEG', 0, 0, 210, 297);
+      const name = state.fields.name.text.trim() || '桌卡';
+      pdf.save(`${name}_桌卡.pdf`);
+      showToast('PDF 已產生');
+    } catch(e) { console.error(e); showToast('PDF 匯出失敗', true); }
+    finally { exporting = false; }
+  }
+
+  async function exportSinglePNG() {
+    if (exporting) return;
+    exporting = true;
+    try {
+      const canvas = await capturePage();
+      const a = document.createElement('a');
+      a.download = `${state.fields.name.text.trim() || '桌卡'}.png`;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+      showToast('PNG 已產生');
+    } catch(e) { console.error(e); showToast('PNG 匯出失敗', true); }
+    finally { exporting = false; }
+  }
+
+  async function exportBatchPDF() {
+    if (!state.batch.length) return showToast('請先匯入名單', true);
+    if (exporting) return;
+    exporting = true;
+    const old = state.batchIndex;
+    try {
+      const pdf = new window.jspdf.jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+      for (let i=0; i<state.batch.length; i++) {
+        state.batchIndex = i;
+        renderBatchTable();
+        renderPreview();
+        await waitFrame();
+        const canvas = await capturePage();
+        if (i > 0) pdf.addPage('a4','portrait');
+        pdf.addImage(canvas.toDataURL('image/jpeg', .92), 'JPEG', 0, 0, 210, 297);
+      }
+      pdf.save(`批次桌卡_${state.batch.length}份.pdf`);
+      showToast('批次 PDF 已產生');
+    } catch(e) { console.error(e); showToast('批次 PDF 匯出失敗', true); }
+    finally {
+      state.batchIndex = old;
+      renderBatchTable();
+      renderPreview();
+      exporting = false;
+    }
+  }
+
+  async function exportBatchZIP() {
+    if (!state.batch.length) return showToast('請先匯入名單', true);
+    if (!window.JSZip) return showToast('ZIP 元件尚未載入', true);
+    if (exporting) return;
+    exporting = true;
+    const old = state.batchIndex;
+    try {
+      const zip = new JSZip();
+      for (let i=0; i<state.batch.length; i++) {
+        state.batchIndex = i;
+        renderBatchTable();
+        renderPreview();
+        await waitFrame();
+        const canvas = await capturePage();
+        const b64 = canvas.toDataURL('image/png').split(',')[1];
+        const safe = state.batch[i].name.replace(/[\\/:*?"<>|]/g,'_') || `第${i+1}筆`;
+        zip.file(`${String(i+1).padStart(3,'0')}_${safe}.png`, b64, {base64:true});
+      }
+      const blob = await zip.generateAsync({type:'blob'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `桌卡圖片_${state.batch.length}份.zip`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      showToast('批次 ZIP 已產生');
+    } catch(e) { console.error(e); showToast('批次 ZIP 匯出失敗', true); }
+    finally {
+      state.batchIndex = old;
+      renderBatchTable();
+      renderPreview();
+      exporting = false;
+    }
+  }
+
+
+  // ===== 可編輯 Word (.docx) 測試匯出 =====
+  // 直接在瀏覽器端建立 Office Open XML (.docx)。
+  // 每個文字欄位都以 Word 的 VML 文字方塊輸出，因此在 Word 內仍可直接修改文字；
+  // 底圖、Logo 與文字方塊使用相同的 A4 絕對座標，避免舊版 HTML .doc 被 Word 重新排版。
+  const DOCX_PX_TO_PT = 72 / 96;
+  const DOCX_PAGE = { width: 794, height: 1123 };
+  const DOCX_FACE = { x: 22, width: 750, height: 480, topY: 70, bottomY: 573 };
+
+  function xmlEscape(v) {
+    return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
+  }
+
+  function wordFontName(kind='kai') {
+    if (kind === 'kai') return 'DFKai-SB';
+    if (kind === 'serif') return 'PMingLiU';
+    return 'Microsoft JhengHei';
+  }
+
+  function wordAlign(v, fallback='left') {
+    return ['left','center','right'].includes(v) ? v : fallback;
+  }
+
+  function pxToPt(v) {
+    return Number(v || 0) * DOCX_PX_TO_PT;
+  }
+
+  function shapeStyle(x, y, w, h, rotation=0, z=5) {
+    const rot = rotation ? `;rotation:${rotation}` : '';
+    return `position:absolute;margin-left:${pxToPt(x).toFixed(2)}pt;margin-top:${pxToPt(y).toFixed(2)}pt;width:${pxToPt(w).toFixed(2)}pt;height:${pxToPt(h).toFixed(2)}pt;z-index:${z};mso-position-horizontal-relative:page;mso-position-vertical-relative:page;mso-wrap-style:none${rot}`;
+  }
+
+  function getTextFitForWord(text, key, field) {
+    const layout = FIELD_LAYOUT[key];
+    let size = clamp(Math.round(Number(field.size) || 38), layout.minSize, 160);
+    const canvas = getTextFitForWord.canvas || (getTextFitForWord.canvas = document.createElement('canvas'));
+    const ctx = canvas.getContext('2d');
+    if (!ctx || !text) return { size, wrap: false };
+    const setFont = () => { ctx.font = `700 ${size}px ${fontStack(field.fontFamily)}`; };
+    setFont();
+    let guard = 180;
+    while (ctx.measureText(String(text)).width > layout.boxWidth + 1 && size > layout.minSize && guard-- > 0) {
+      size -= 1;
+      setFont();
+    }
+    const stillWide = ctx.measureText(String(text)).width > layout.boxWidth + 1;
+    return { size, wrap: Boolean(stillWide && layout.allowWrap) };
+  }
+
+  function textBoxXml(id, x, y, w, h, field, key, rotation=0) {
+    const fit = getTextFitForWord(field.text || '', key, field);
+    const fontPx = fit.size;
+    const fontHalfPoints = Math.max(2, Math.round(fontPx * DOCX_PX_TO_PT * 2));
+    const lineTwips = Math.max(20, Math.round(fontPx * DOCX_PX_TO_PT * 20 * (fit.wrap ? 1.04 : 1.08)));
+    const color = String(field.color || '#000000').replace('#','').toUpperCase();
+    const font = wordFontName(field.fontFamily);
+    const align = wordAlign(field.align, FIELD_LAYOUT[key].defaultAlign);
+    return `<w:r><w:pict>
+      <v:shape id="TextBox${id}" type="#_x0000_t202" style="${shapeStyle(x,y,w,h,rotation,5)};v-text-anchor:middle" stroked="f" filled="f" o:allowincell="f">
+        <v:textbox inset="0,0,0,0" style="mso-fit-shape-to-text:f">
+          <w:txbxContent>
+            <w:p>
+              <w:pPr><w:jc w:val="${align}"/><w:spacing w:before="0" w:after="0" w:line="${lineTwips}" w:lineRule="exact"/></w:pPr>
+              <w:r><w:rPr><w:rFonts w:ascii="${xmlEscape(font)}" w:hAnsi="${xmlEscape(font)}" w:eastAsia="${xmlEscape(font)}"/><w:b/><w:color w:val="${color}"/><w:sz w:val="${fontHalfPoints}"/><w:szCs w:val="${fontHalfPoints}"/></w:rPr><w:t xml:space="preserve">${xmlEscape(field.text || '')}</w:t></w:r>
+            </w:p>
+          </w:txbxContent>
+        </v:textbox>
+        <w10:wrap type="none"/>
+      </v:shape>
+    </w:pict></w:r>`;
+  }
+
+  function imageShapeXml(id, relId, x, y, w, h, rotation=0, z=1) {
+    return `<w:r><w:pict>
+      <v:shape id="Image${id}" type="#_x0000_t75" style="${shapeStyle(x,y,w,h,rotation,z)}" stroked="f" filled="f" o:allowincell="f">
+        <v:imagedata r:id="${relId}" o:title=""/>
+        <w10:wrap type="none"/>
+      </v:shape>
+    </w:pict></w:r>`;
+  }
+
+  function guideRectXml(id, x, y, w, thickness=1, color='444444') {
+    return `<w:r><w:pict><v:rect id="Guide${id}" style="${shapeStyle(x,y,w,thickness,0,9)}" stroked="f" fillcolor="#${color}" o:allowincell="f"><w10:wrap type="none"/></v:rect></w:pict></w:r>`;
+  }
+
+  function vmlShapeTypesXml() {
+    return `<w:r><w:pict>
+      <v:shapetype id="_x0000_t202" coordsize="21600,21600" o:spt="202" path="m,l,21600r21600,l21600,xe"><v:stroke joinstyle="miter"/><v:path gradientshapeok="t" o:connecttype="rect"/></v:shapetype>
+      <v:shapetype id="_x0000_t75" coordsize="21600,21600" o:spt="75" o:preferrelative="t" path="m@4@5l@4@11@9@11@9@5xe" filled="f" stroked="f"><v:stroke joinstyle="miter"/><v:formulas><v:f eqn="if lineDrawn pixelLineWidth 0"/><v:f eqn="sum @0 1 0"/><v:f eqn="sum 0 0 @1"/><v:f eqn="prod @2 1 2"/><v:f eqn="prod @3 21600 pixelWidth"/><v:f eqn="prod @3 21600 pixelHeight"/><v:f eqn="sum @0 0 1"/><v:f eqn="prod @6 1 2"/><v:f eqn="prod @7 21600 pixelWidth"/><v:f eqn="sum @8 21600 0"/><v:f eqn="prod @7 21600 pixelHeight"/><v:f eqn="sum @10 21600 0"/></v:formulas><v:path o:extrusionok="f" gradientshapeok="t" o:connecttype="rect"/><o:lock v:ext="edit" aspectratio="t"/></v:shapetype>
+    </w:pict></w:r>`;
+  }
+
+  function mirrorInTopFace(localX, localY, w, h) {
+    return {
+      x: DOCX_FACE.x + DOCX_FACE.width - localX - w,
+      y: DOCX_FACE.topY + DOCX_FACE.height - localY - h
+    };
+  }
+
+  function normalInBottomFace(localX, localY) {
+    return { x: DOCX_FACE.x + localX, y: DOCX_FACE.bottomY + localY };
+  }
+
+  function wordTextGeometry(key, field) {
+    const layout = FIELD_LAYOUT[key];
+    const fit = getTextFitForWord(field.text || '', key, field);
+    const lineH = fit.size * (fit.wrap ? 1.04 : 1.08);
+    const h = fit.wrap ? lineH * 2.15 : lineH * 1.18;
+    const centerX = DOCX_FACE.width / 2 + (Number(field.x) || 0);
+    const centerY = DOCX_FACE.height / 2 + BASE_Y[key] + (Number(field.y) || 0);
+    return {
+      x: centerX - layout.boxWidth / 2,
+      y: centerY - h / 2,
+      w: layout.boxWidth,
+      h,
+      field: { ...field, size: fit.size }
+    };
+  }
+
+  function wordImageGeometry(img, kind) {
+    if (!img) return null;
+    const isBg = kind === 'background';
+    const w = isBg
+      ? DOCX_FACE.width * clamp(Number(state.backgroundScale) || 100, 20, 250) / 100
+      : clamp(Number(state.logoWidth) || 110, 20, 320);
+    const h = w * img.height / img.width;
+    const dx = isBg ? (Number(state.backgroundX) || 0) : (Number(state.logoX) || 0);
+    const dy = isBg ? (Number(state.backgroundY) || 0) : (Number(state.logoY) || 0);
+    return { x: DOCX_FACE.width / 2 + dx - w / 2, y: DOCX_FACE.height / 2 + dy - h / 2, w, h };
+  }
+
+  function imageDataToPng(dataUrl) {
+    if (!dataUrl) return Promise.resolve(null);
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, img.naturalWidth || img.width || 1);
+          canvas.height = Math.max(1, img.naturalHeight || img.height || 1);
+          const ctx = canvas.getContext('2d');
+          ctx.clearRect(0,0,canvas.width,canvas.height);
+          ctx.drawImage(img,0,0);
+          const png = canvas.toDataURL('image/png');
+          resolve({ base64: png.split(',')[1], width: canvas.width, height: canvas.height });
+        } catch (e) { reject(e); }
+      };
+      img.onerror = () => reject(new Error('圖片轉換失敗'));
+      img.src = dataUrl;
+    });
+  }
+
+  function fieldsForSingleWord() {
+    return {
+      event: {...state.fields.event},
+      title: {...state.fields.title},
+      name: {...state.fields.name}
+    };
+  }
+
+  function fieldsForBatchWord(row) {
+    ensureBatchStyles(row);
+    return {
+      event: {text: row.event || '', ...row.styles.event},
+      title: {text: row.title || '', ...row.styles.title},
+      name:  {text: row.name || '', ...row.styles.name}
+    };
+  }
+
+  function pageShapesXml(fields, resources, pageIndex, idCounter) {
+    let xml = '';
+    const nextId = () => `${pageIndex + 1}_${idCounter.value++}`;
+
+    const imageDefs = [
+      { kind: 'background', img: resources.background, relId: resources.backgroundRelId, z: 1 },
+      { kind: 'logo', img: resources.logo, relId: resources.logoRelId, z: 3 }
+    ];
+    imageDefs.forEach(def => {
+      if (!def.img || !def.relId) return;
+      const g = wordImageGeometry(def.img, def.kind);
+      const bottom = normalInBottomFace(g.x, g.y);
+      const top = mirrorInTopFace(g.x, g.y, g.w, g.h);
+      xml += imageShapeXml(nextId(), def.relId, bottom.x, bottom.y, g.w, g.h, 0, def.z);
+      xml += imageShapeXml(nextId(), def.relId, top.x, top.y, g.w, g.h, 180, def.z);
+    });
+
+    ['event','title','name'].forEach(key => {
+      const f = fields[key];
+      const g = wordTextGeometry(key, f);
+      const bottom = normalInBottomFace(g.x, g.y);
+      const top = mirrorInTopFace(g.x, g.y, g.w, g.h);
+      xml += textBoxXml(nextId(), bottom.x, bottom.y, g.w, g.h, {...f, size:g.field.size}, key, 0);
+      xml += textBoxXml(nextId(), top.x, top.y, g.w, g.h, {...f, size:g.field.size}, key, 180);
+    });
+
+    if (state.showGuide) {
+      xml += guideRectXml(nextId(), 8, 54, 778, 1, '222222');
+      xml += guideRectXml(nextId(), 22, 561, 750, 1, '444444');
+      xml += guideRectXml(nextId(), 8, 1069, 778, 1, '222222');
+    }
+    return xml;
+  }
+
+  function buildDocumentXml(pages, resources) {
+    const counter = { value: 1 };
+    const paras = pages.map((fields, i) => {
+      const types = i === 0 ? vmlShapeTypesXml() : '';
+      const shapes = pageShapesXml(fields, resources, i, counter);
+      // 後續頁使用 pageBreakBefore，避免浮動 VML 物件搭配段落內 page break 時被 Word 拆出額外空白頁。
+      const pageBreakBefore = i > 0 ? '<w:pageBreakBefore/>' : '';
+      return `<w:p><w:pPr>${pageBreakBefore}<w:spacing w:before="0" w:after="0" w:line="1" w:lineRule="exact"/></w:pPr>${types}${shapes}</w:p>`;
+    }).join('');
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w10="urn:schemas-microsoft-com:office:word">
+  <w:body>${paras}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="0" w:right="0" w:bottom="0" w:left="0" w:header="0" w:footer="0" w:gutter="0"/><w:docGrid w:linePitch="1"/></w:sectPr></w:body>
+</w:document>`;
+  }
+
+  function buildStylesXml() {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr><w:rPr><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr></w:style>
+</w:styles>`;
+  }
+
+  function buildSettingsXml() {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:zoom w:percent="100"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`;
+  }
+
+  function buildContentTypesXml() {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="png" ContentType="image/png"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+</Types>`;
+  }
+
+  function buildPackageRelsXml() {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>`;
+  }
+
+  function buildDocumentRelsXml(resources) {
+    const rels = [
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>',
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>'
+    ];
+    if (resources.backgroundRelId) rels.push(`<Relationship Id="${resources.backgroundRelId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/background.png"/>`);
+    if (resources.logoRelId) rels.push(`<Relationship Id="${resources.logoRelId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/logo.png"/>`);
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels.join('')}</Relationships>`;
+  }
+
+  function buildCorePropsXml() {
+    const now = new Date().toISOString();
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>桌卡</dc:title><dc:creator>桌卡製作工具</dc:creator><cp:lastModifiedBy>桌卡製作工具</cp:lastModifiedBy><dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified></cp:coreProperties>`;
+  }
+
+  function buildAppPropsXml() {
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>Microsoft Office Word</Application><DocSecurity>0</DocSecurity><ScaleCrop>false</ScaleCrop><Company></Company><LinksUpToDate>false</LinksUpToDate><SharedDoc>false</SharedDoc><HyperlinksChanged>false</HyperlinksChanged><AppVersion>16.0000</AppVersion></Properties>`;
+  }
+
+  async function buildEditableDocxBlob(pages) {
+    if (!window.JSZip) throw new Error('JSZip 尚未載入');
+    const [background, logo] = await Promise.all([
+      imageDataToPng(state.background),
+      imageDataToPng(state.logo)
+    ]);
+    let relNum = 3;
+    const resources = {
+      background,
+      logo,
+      backgroundRelId: background ? `rId${relNum++}` : null,
+      logoRelId: logo ? `rId${relNum++}` : null
+    };
+
+    const zip = new JSZip();
+    zip.file('[Content_Types].xml', buildContentTypesXml());
+    zip.folder('_rels').file('.rels', buildPackageRelsXml());
+    zip.folder('docProps').file('core.xml', buildCorePropsXml());
+    zip.folder('docProps').file('app.xml', buildAppPropsXml());
+    const word = zip.folder('word');
+    word.file('document.xml', buildDocumentXml(pages, resources));
+    word.file('styles.xml', buildStylesXml());
+    word.file('settings.xml', buildSettingsXml());
+    word.folder('_rels').file('document.xml.rels', buildDocumentRelsXml(resources));
+    const media = word.folder('media');
+    if (background) media.file('background.png', background.base64, {base64:true});
+    if (logo) media.file('logo.png', logo.base64, {base64:true});
+    return zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document', compression:'DEFLATE', compressionOptions:{level:6}});
+  }
+
+  function downloadBlob(blob, filename) {
+    const a = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
+  async function exportEditableWord() {
+    if (exporting) return;
+    exporting = true;
+    try {
+      const fields = fieldsForSingleWord();
+      const blob = await buildEditableDocxBlob([fields]);
+      const safe = (fields.name.text || '桌卡').replace(/[\\/:*?"<>|]/g,'_');
+      downloadBlob(blob, `${safe}_可編輯桌卡.docx`);
+      showToast('可編輯 Word (.docx) 已產生');
+    } catch(e) {
+      console.error(e);
+      showToast('Word (.docx) 匯出失敗', true);
+    } finally {
+      exporting = false;
+    }
+  }
+
+  async function exportBatchEditableWord() {
+    if (!state.batch.length) return showToast('請先匯入名單', true);
+    if (exporting) return;
+    exporting = true;
+    try {
+      const pages = state.batch.map(row => fieldsForBatchWord(row));
+      const blob = await buildEditableDocxBlob(pages);
+      downloadBlob(blob, `批次可編輯桌卡_${state.batch.length}份.docx`);
+      showToast(`批次 Word 已產生，共 ${state.batch.length} 頁`);
+    } catch(e) {
+      console.error(e);
+      showToast('批次 Word (.docx) 匯出失敗', true);
+    } finally {
+      exporting = false;
+    }
+  }
+
+  function saveSettings() {
+    const copy = JSON.parse(JSON.stringify(state));
+    copy.batch = [];
+    copy.batchIndex = 0;
+    try {
+      localStorage.setItem('tableCardsCustomV6', JSON.stringify(copy));
+      showToast('目前設定已儲存到瀏覽器');
+    } catch(e) {
+      showToast('儲存失敗；若底圖或 Logo 太大，請先移除圖片再儲存', true);
+    }
+  }
+
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem('tableCardsCustomV6') || localStorage.getItem('tableCardsCustomV5') || localStorage.getItem('tableCardsCustomV3') || localStorage.getItem('tableCardsCustomV2') || localStorage.getItem('tableCardsCustomV1');
+      if (!raw) return showToast('尚未儲存任何設定', true);
+      const saved = JSON.parse(raw);
+      const fresh = defaultState();
+      const migratedFields = {
+        event: { ...fresh.fields.event, ...((saved.fields||{}).event||{}) },
+        title: { ...fresh.fields.title, ...((saved.fields||{}).title||{}) },
+        name:  { ...fresh.fields.name,  ...((saved.fields||{}).name||{}) }
+      };
+      // v4 以前的 X 是以「每行自身置中」為基準；v5 改為固定文字框。
+      // 舊設定第一次載入時把活動/職稱改成共同左基準，避免直接沿用舊 X 而跑出邊框。
+      if (!saved.layoutVersion || saved.layoutVersion < 5) {
+        migratedFields.event.align = 'left'; migratedFields.event.x = 0;
+        migratedFields.title.align = 'left'; migratedFields.title.x = 0;
+        migratedFields.name.align = 'center';
+      }
+      state = { ...fresh, ...saved, layoutVersion: 7, fields: migratedFields, batch: state.batch, batchIndex: state.batchIndex };
+      syncAllUI();
+      showToast('已載入已存設定');
+    } catch(e) { showToast('載入設定失敗', true); }
+  }
+
+  function wireEvents() {
+    document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => setMode(t.dataset.mode)));
+    $('showGuide').addEventListener('change', e => { state.showGuide = e.target.checked; renderPreview(); });
+    $('zoom').addEventListener('input', e => { state.zoom = parseInt(e.target.value,10); renderPreview(); });
+
+    const layoutRanges = {
+      backgroundScale: [20, 250], backgroundX: [-350, 350], backgroundY: [-240, 240],
+      logoWidth: [20, 320], logoX: [-350, 350], logoY: [-240, 240]
+    };
+    Object.entries(layoutRanges).forEach(([key, [min, max]]) => {
+      const range = $(`${key}Range`);
+      const number = $(key);
+      const update = (value) => {
+        state[key] = clamp(parseInt(value || '0', 10), min, max);
+        syncLayoutUI();
+        renderPreview();
+      };
+      range.addEventListener('input', e => update(e.target.value));
+      number.addEventListener('input', e => update(e.target.value));
+    });
+    document.querySelectorAll('.layout-nudge').forEach(btn => btn.addEventListener('click', e => {
+      const key = e.currentTarget.dataset.target;
+      const delta = parseInt(e.currentTarget.dataset.delta || '0', 10);
+      const limits = layoutRanges[key];
+      if (!limits) return;
+      state[key] = clamp(Number(state[key] || 0) + delta, limits[0], limits[1]);
+      syncLayoutUI();
+      renderPreview();
+    }));
+
+    $('backgroundFile').addEventListener('change', e => loadImage(e.target.files[0], src => {
+      state.background = src;
+      renderPreview();
+      showToast('底圖已套用，可直接調整大小與位置');
+    }, '底圖', 8));
+    $('clearBackground').addEventListener('click', () => { state.background = null; $('backgroundFile').value=''; renderPreview(); });
+    $('resetBackgroundLayout').addEventListener('click', () => {
+      state.backgroundScale = 100; state.backgroundX = 0; state.backgroundY = 0;
+      syncLayoutUI(); renderPreview(); showToast('底圖大小與位置已重設');
+    });
+
+    $('logoFile').addEventListener('change', e => loadImage(e.target.files[0], src => {
+      state.logo = src;
+      renderPreview();
+      showToast('Logo 已套用，可直接調整大小與位置');
+    }, 'Logo', 4));
+    $('clearLogo').addEventListener('click', () => { state.logo = null; $('logoFile').value=''; renderPreview(); });
+    $('resetLogoLayout').addEventListener('click', () => {
+      state.logoWidth = 110; state.logoX = -280; state.logoY = -190;
+      syncLayoutUI(); renderPreview(); showToast('Logo 大小與位置已重設');
+    });
+    $('downloadTemplate').addEventListener('click', downloadTemplate);
+    $('batchFile').addEventListener('change', e => { importBatch(e.target.files[0]); e.target.value=''; });
+    $('clearBatch').addEventListener('click', () => { state.batch=[]; state.batchIndex=0; renderBatchTable(); syncAllEditors(); $('editorNote').textContent='請先匯入名單'; renderPreview(); });
+    $('applyBatchStyleAll').addEventListener('click', () => {
+      if (!state.batch.length) return showToast('請先匯入名單', true);
+      const source = state.batch[state.batchIndex];
+      ensureBatchStyles(source);
+      state.batch.forEach(row => {
+        ensureBatchStyles(row);
+        ['event','title','name'].forEach(key => { row.styles[key] = { ...source.styles[key] }; });
+      });
+      renderPreview();
+      showToast('已將目前這筆的文字設定套用到全部資料');
+    });
+    $('exportPdf').addEventListener('click', exportSinglePDF);
+    $('exportPng').addEventListener('click', exportSinglePNG);
+    $('exportWord').addEventListener('click', exportEditableWord);
+    $('exportBatchPdf').addEventListener('click', exportBatchPDF);
+    $('exportBatchZip').addEventListener('click', exportBatchZIP);
+    $('exportBatchWord').addEventListener('click', exportBatchEditableWord);
+    $('saveSettings').addEventListener('click', saveSettings);
+    $('loadSettings').addEventListener('click', loadSettings);
+    $('resetAll').addEventListener('click', () => {
+      if (!confirm('確定要將文字、底圖、Logo、位置與版面設定全部還原嗎？')) return;
+      state = defaultState();
+      setMode('single');
+      showToast('已全部還原');
+    });
+  }
+
+  buildEditors();
+  wireEvents();
+  setMode('single');
+})();
+</script>
+</body>
+</html>
