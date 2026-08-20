@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>桌卡製作工具</title>
+  <title>桌卡製作工具 v16｜姓名文字間距置中展開</title>
   <style>
     :root {
       --bg: #eef6ff;
@@ -122,7 +122,7 @@
   <aside class="controls">
     <div class="header">
       <h1>桌卡製作工具</h1>
-      <p>活動名稱、職稱、姓名可分別調整字型、對齊方式、X / Y 位置、大小與文字顏色；底圖與 Logo 也可自由調整大小及位置。</p>
+      <p>活動名稱、職稱、姓名可分別調整字型、文字間距、對齊方式、X / Y 位置、大小與顏色；摺線、底圖與 Logo 也可調整位置。</p>
       <div class="tabs">
         <button class="tab active" data-mode="single">單筆製作</button>
         <button class="tab" data-mode="batch">大量匯入</button>
@@ -155,13 +155,31 @@
         <div class="batch-tools" style="margin-top:10px;margin-bottom:0;">
           <button class="btn secondary" id="applyBatchStyleAll">將目前這筆文字設定套用到全部</button>
         </div>
-        <div class="hint">只會套用字型、大小、顏色、對齊方式與 X / Y 位置，不會覆蓋其他人的活動名稱、職稱與姓名。</div>
+        <div class="hint">只會套用字型、大小、文字間距、顏色、對齊方式與 X / Y 位置，不會覆蓋其他人的活動名稱、職稱與姓名。</div>
       </section>
 
       <section class="section">
         <div class="section-title">版面設定</div>
         <div class="checkline">
           <label><input id="showGuide" type="checkbox" checked /> 顯示裁切 / 摺線</label>
+        </div>
+
+        <div class="filebox" style="margin-top:12px;">
+          <label class="control-label">頂部 / 底部摺線位置</label>
+          <div class="hint">可分別上下微調頂部與底部摺線；中央摺線維持固定位置。</div>
+          <div class="row">
+            <label>頂部摺線 Y</label>
+            <input id="topFoldYRange" type="range" min="0" max="300" value="54" />
+            <div class="nudge"><button class="layout-nudge" data-target="topFoldY" data-delta="-1">−</button><input id="topFoldY" class="number-input" type="number" min="0" max="300" /><button class="layout-nudge" data-target="topFoldY" data-delta="1">＋</button></div>
+          </div>
+          <div class="row">
+            <label>底部摺線 Y</label>
+            <input id="bottomFoldYRange" type="range" min="823" max="1122" value="1069" />
+            <div class="nudge"><button class="layout-nudge" data-target="bottomFoldY" data-delta="-1">−</button><input id="bottomFoldY" class="number-input" type="number" min="823" max="1122" /><button class="layout-nudge" data-target="bottomFoldY" data-delta="1">＋</button></div>
+          </div>
+          <div class="batch-tools" style="margin-top:10px;margin-bottom:0;">
+            <button class="btn secondary" id="resetFoldLayout">重設摺線位置</button>
+          </div>
         </div>
 
         <div class="filebox" style="margin-top:12px;">
@@ -285,14 +303,16 @@
     name:  { boxWidth: 660, minSize: 48, allowWrap: false, defaultAlign: 'center' }
   };
   const defaultState = () => ({
-    layoutVersion: 7,
+    layoutVersion: 8,
     mode: 'single',
     fields: {
-      event: { text: '', fontFamily: 'kai', size: 38, color: '#001b72', align: 'left', x: 0, y: 0 },
-      title: { text: '', fontFamily: 'kai', size: 50, color: '#001b72', align: 'left', x: 0, y: 0 },
-      name:  { text: '', fontFamily: 'kai', size: 108, color: '#a30000', align: 'center', x: 0, y: 0 }
+      event: { text: '', fontFamily: 'kai', size: 38, letterSpacing: 0, color: '#001b72', align: 'left', x: 0, y: 0 },
+      title: { text: '', fontFamily: 'kai', size: 50, letterSpacing: 0, color: '#001b72', align: 'left', x: 0, y: 0 },
+      name:  { text: '', fontFamily: 'kai', size: 108, letterSpacing: 0, color: '#a30000', align: 'center', x: 0, y: 0 }
     },
     showGuide: true,
+    topFoldY: 54,
+    bottomFoldY: 1069,
     background: null,
     backgroundScale: 100,
     backgroundX: 0,
@@ -321,17 +341,40 @@
     showToast.t = setTimeout(() => el.classList.add('hidden'), 2800);
   }
 
+  function detectLocalFont(fontName) {
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return false;
+      const sample = '王漢宗超明體繁ABC123測試文字';
+      const size = '72px';
+      return ['monospace','serif','sans-serif'].some(base => {
+        ctx.font = `${size} ${base}`;
+        const baseWidth = ctx.measureText(sample).width;
+        ctx.font = `${size} "${fontName}", ${base}`;
+        return Math.abs(ctx.measureText(sample).width - baseWidth) > 0.1;
+      });
+    } catch (_) {
+      return false;
+    }
+  }
+
+  const HAS_WANG_FONT = detectLocalFont('王漢宗超明體繁');
+
   function fontStack(kind='kai') {
     if (kind === 'kai') return "'BiauKai','標楷體','DFKai-SB','KaiTi',serif";
     if (kind === 'serif') return "'PMingLiU','新細明體','Noto Serif TC',serif";
+    if (kind === 'wang') return HAS_WANG_FONT ? "'王漢宗超明體繁','PMingLiU','新細明體',serif" : "'BiauKai','標楷體','DFKai-SB','KaiTi',serif";
     return "'Microsoft JhengHei','Noto Sans TC',Arial,sans-serif";
   }
 
   function styleFromField(field, key='event') {
     const layout = FIELD_LAYOUT[key] || FIELD_LAYOUT.event;
+    const requestedFont = field.fontFamily || 'kai';
     return {
-      fontFamily: field.fontFamily || 'kai',
+      fontFamily: requestedFont === 'wang' && !HAS_WANG_FONT ? 'kai' : requestedFont,
       size: Number(field.size) || 38,
+      letterSpacing: clamp(Number(field.letterSpacing) || 0, -10, 40),
       color: field.color || '#000000',
       align: ['left','center','right'].includes(field.align) ? field.align : layout.defaultAlign,
       x: Number(field.x) || 0,
@@ -405,7 +448,7 @@
       const layout = FIELD_LAYOUT[key];
       const layer = document.createElement('div');
       layer.className = `text-layer layer-${key}`;
-      layer.textContent = data[key] || '';
+      const text = data[key] || '';
       layer.style.fontFamily = fontStack(f.fontFamily);
       layer.style.fontSize = `${f.size}px`;
       layer.style.color = f.color;
@@ -414,9 +457,45 @@
       layer.style.whiteSpace = 'nowrap';
       layer.style.overflow = 'visible';
       layer.style.transform = `translate(calc(-50% + ${f.x}px), calc(-50% + ${BASE_Y[key] + f.y}px))`;
+
+      // 姓名置中時，文字間距以整個姓名的中心為基準對稱展開。
+      // 例如三個字：中間字固定，第一字往左、第三字往右；
+      // 兩個或四個字則以中央分界點為基準向左右展開。
+      if (key === 'name' && (f.align || layout.defaultAlign) === 'center') {
+        layer.dataset.centerSpacing = '1';
+        layer.dataset.rawText = text;
+        layer.style.letterSpacing = '0px';
+        const chars = Array.from(text);
+        const middle = (chars.length - 1) / 2;
+        const spacing = Number(f.letterSpacing) || 0;
+        chars.forEach((char, index) => {
+          const span = document.createElement('span');
+          span.className = 'name-spacing-char';
+          span.textContent = char;
+          span.style.display = 'inline-block';
+          span.style.transform = `translateX(${(index - middle) * spacing}px)`;
+          layer.appendChild(span);
+        });
+      } else {
+        layer.textContent = text;
+        layer.style.letterSpacing = `${Number(f.letterSpacing) || 0}px`;
+      }
+
       face.appendChild(layer);
       fitTextLayer(layer, key, Number(f.size) || 38);
     });
+  }
+
+  function layerVisualWidth(layer, key) {
+    if (key === 'name' && layer?.dataset?.centerSpacing === '1') {
+      const chars = Array.from(layer.querySelectorAll('.name-spacing-char'));
+      if (!chars.length) return 0;
+      const rects = chars.map(el => el.getBoundingClientRect());
+      const left = Math.min(...rects.map(r => r.left));
+      const right = Math.max(...rects.map(r => r.right));
+      return Math.max(0, right - left);
+    }
+    return layer.scrollWidth;
   }
 
   function fitTextLayer(layer, key, preferredSize) {
@@ -429,15 +508,16 @@
     layer.style.maxHeight = '';
     layer.style.overflow = 'visible';
 
-    // 逐步縮小至固定文字框內。以 DOM 實際字型寬度判斷，匯出 PDF/PNG 時亦使用同一結果。
+    // 逐步縮小至固定文字框內。姓名置中時以實際左右展開後的視覺寬度判斷，
+    // 確保調大字距後仍會在必要時自動縮字，而不會超出桌卡。
     let guard = 180;
-    while (layer.scrollWidth > layer.clientWidth + 1 && size > layout.minSize && guard-- > 0) {
+    while (layerVisualWidth(layer, key) > layer.clientWidth + 1 && size > layout.minSize && guard-- > 0) {
       size -= 1;
       layer.style.fontSize = `${size}px`;
     }
 
     // 活動名稱 / 職稱在最低字級仍超寬時，最後才允許換成最多兩行，避免文字跑出邊框。
-    if (layer.scrollWidth > layer.clientWidth + 1 && layout.allowWrap) {
+    if (layerVisualWidth(layer, key) > layer.clientWidth + 1 && layout.allowWrap) {
       layer.style.whiteSpace = 'normal';
       layer.style.overflowWrap = 'anywhere';
       layer.style.lineHeight = '1.04';
@@ -449,6 +529,10 @@
   function renderPreview() {
     document.querySelectorAll('.face').forEach(makeFaceContent);
     document.querySelectorAll('.guide').forEach(el => el.style.display = state.showGuide ? '' : 'none');
+    const topGuide = document.querySelector('.cut-line.top');
+    const bottomGuide = document.querySelector('.cut-line.bottom');
+    if (topGuide) topGuide.style.top = `${clamp(Number(state.topFoldY ?? 54), 0, 300)}px`;
+    if (bottomGuide) bottomGuide.style.top = `${clamp(Number(state.bottomFoldY ?? 1069), 823, 1122)}px`;
     $('pageScale').style.transform = `scale(${state.zoom / 100})`;
     $('pageScale').style.width = `${794 * state.zoom / 100}px`;
     $('pageScale').style.height = `${1123 * state.zoom / 100}px`;
@@ -469,6 +553,7 @@
             <option value="kai">標楷體 / 楷體</option>
             <option value="sans">微軟正黑體 / 黑體</option>
             <option value="serif">新細明體 / 明體</option>
+            ${HAS_WANG_FONT ? '<option value="wang">王漢宗超明體繁</option>' : ''}
           </select>
           <span></span>
         </div>
@@ -487,6 +572,11 @@
           <input class="number-input field-size" data-key="${key}" type="number" min="16" max="160" />
         </div>
         <div class="row">
+          <label>文字間距</label>
+          <input class="field-spacing-range" data-key="${key}" type="range" min="-10" max="40" value="0" />
+          <div class="nudge"><button class="spacing-nudge" data-key="${key}" data-delta="-1">−</button><input class="number-input field-spacing" data-key="${key}" type="number" min="-10" max="40" /><button class="spacing-nudge" data-key="${key}" data-delta="1">＋</button></div>
+        </div>
+        <div class="row">
           <label>水平位置 X</label>
           <input class="field-x-range" data-key="${key}" type="range" min="-300" max="300" />
           <div class="nudge"><button class="nudge-btn" data-key="${key}" data-axis="x" data-delta="-1">−</button><input class="number-input field-x" data-key="${key}" type="number" min="-300" max="300" /><button class="nudge-btn" data-key="${key}" data-axis="x" data-delta="1">＋</button></div>
@@ -501,7 +591,7 @@
           <div class="color-wrap"><input class="field-color" data-key="${key}" type="color" /><input class="hex-input field-hex" data-key="${key}" maxlength="7" /></div>
           <span></span>
         </div>
-        <div class="hint">${key === 'name' ? '姓名預設置中；過長時會自動縮小，避免超出桌卡。' : '使用固定文字框；靠左時可與其他資訊共用字首基準線。文字過長會先自動縮小，必要時才換成兩行。'}</div>
+        <div class="hint">${key === 'name' ? '姓名預設置中；文字間距會以姓名中心為基準向左右對稱展開，三個字時中間字會固定不動。過長時會自動縮小，避免超出桌卡。' : '使用固定文字框；靠左時可與其他資訊共用字首基準線。文字過長會先自動縮小，必要時才換成兩行。'}${HAS_WANG_FONT ? ' 已偵測到王漢宗超明體繁，可在字型選單使用。' : ''}</div>
       </div>`;
   }
 
@@ -530,6 +620,20 @@
       const key = e.target.dataset.key;
       const value = clamp(parseInt(e.target.value || '16', 10), 16, 160);
       setActiveFieldProp(key, 'size', value);
+      syncEditor(key);
+      renderPreview();
+    }));
+    document.querySelectorAll('.field-spacing-range,.field-spacing').forEach(el => el.addEventListener('input', e => {
+      const key = e.target.dataset.key;
+      const value = clamp(parseInt(e.target.value || '0', 10), -10, 40);
+      setActiveFieldProp(key, 'letterSpacing', value);
+      syncEditor(key);
+      renderPreview();
+    }));
+    document.querySelectorAll('.spacing-nudge').forEach(btn => btn.addEventListener('click', e => {
+      const { key, delta } = e.currentTarget.dataset;
+      const f = getActiveField(key);
+      setActiveFieldProp(key, 'letterSpacing', clamp(Number(f.letterSpacing || 0) + parseInt(delta,10), -10, 40));
       syncEditor(key);
       renderPreview();
     }));
@@ -590,10 +694,12 @@
     const f = getActiveField(key);
     const q = (sel) => document.querySelector(`${sel}[data-key="${key}"]`);
     q('.field-text').value = f.text || '';
-    q('.field-font').value = f.fontFamily || 'kai';
+    q('.field-font').value = (f.fontFamily === 'wang' && !HAS_WANG_FONT) ? 'kai' : (f.fontFamily || 'kai');
     q('.field-align').value = f.align || FIELD_LAYOUT[key].defaultAlign;
     q('.field-size-range').value = f.size;
     q('.field-size').value = f.size;
+    q('.field-spacing-range').value = Number(f.letterSpacing) || 0;
+    q('.field-spacing').value = Number(f.letterSpacing) || 0;
     q('.field-x-range').value = f.x;
     q('.field-x').value = f.x;
     q('.field-y-range').value = f.y;
@@ -608,6 +714,8 @@
 
   function syncLayoutUI() {
     const values = {
+      topFoldY: clamp(Number(state.topFoldY ?? 54), 0, 300),
+      bottomFoldY: clamp(Number(state.bottomFoldY ?? 1069), 823, 1122),
       backgroundScale: clamp(Number(state.backgroundScale) || 100, 20, 250),
       backgroundX: clamp(Number(state.backgroundX) || 0, -350, 350),
       backgroundY: clamp(Number(state.backgroundY) || 0, -240, 240),
@@ -909,7 +1017,7 @@
   }
 
 
-  // ===== 可編輯 Word (.docx) 匯出（v14：上半部圖文統一 DrawingML，文字固定在最前層） =====
+  // ===== 可編輯 Word (.docx) 匯出（v15：支援字距、摺線位置與本機王漢宗超明體繁） =====
   // 直接在瀏覽器端建立 Office Open XML (.docx)。
   // 每個文字欄位都以 Word 的 VML 文字方塊輸出，因此在 Word 內仍可直接修改文字；
   // 底圖、Logo 與文字方塊使用相同的 A4 絕對座標，避免舊版 HTML .doc 被 Word 重新排版。
@@ -924,6 +1032,7 @@
   function wordFontName(kind='kai') {
     if (kind === 'kai') return 'DFKai-SB';
     if (kind === 'serif') return 'PMingLiU';
+    if (kind === 'wang') return HAS_WANG_FONT ? '王漢宗超明體繁' : 'DFKai-SB';
     return 'Microsoft JhengHei';
   }
 
@@ -947,13 +1056,15 @@
     const ctx = canvas.getContext('2d');
     if (!ctx || !text) return { size, wrap: false, textWidth: 0 };
     const setFont = () => { ctx.font = `700 ${size}px ${fontStack(field.fontFamily)}`; };
+    const letterSpacing = clamp(Number(field.letterSpacing) || 0, -10, 40);
+    const spacingWidth = Math.max(0, Array.from(String(text)).length - 1) * letterSpacing;
     setFont();
-    let measured = ctx.measureText(String(text)).width;
+    let measured = ctx.measureText(String(text)).width + spacingWidth;
     let guard = 180;
     while (measured > layout.boxWidth + 1 && size > layout.minSize && guard-- > 0) {
       size -= 1;
       setFont();
-      measured = ctx.measureText(String(text)).width;
+      measured = ctx.measureText(String(text)).width + spacingWidth;
     }
     const stillWide = measured > layout.boxWidth + 1;
     return { size, wrap: Boolean(stillWide && layout.allowWrap), textWidth: measured };
@@ -979,6 +1090,8 @@
     const lineTwips = Math.max(20, Math.round(fontPx * DOCX_PX_TO_PT * 20 * (fit.wrap ? 1.04 : 1.08)));
     const color = String(field.color || '#000000').replace('#','').toUpperCase();
     const font = wordFontName(field.fontFamily);
+    const charSpacingTwips = Math.round(pxToPt(clamp(Number(field.letterSpacing) || 0, -10, 40)) * 20);
+    const charSpacingXml = charSpacingTwips ? `<w:spacing w:val="${charSpacingTwips}"/>` : '';
     const align = wordAlign(field.align, FIELD_LAYOUT[key].defaultAlign);
     const indentTwips = wordIndentTwips(fit, w, align);
     const indentXml = indentTwips ? `<w:ind w:left="${indentTwips}"/>` : '';
@@ -988,7 +1101,7 @@
           <w:txbxContent>
             <w:p>
               <w:pPr><w:jc w:val="left"/>${indentXml}<w:spacing w:before="0" w:after="0" w:line="${lineTwips}" w:lineRule="exact"/></w:pPr>
-              <w:r><w:rPr><w:rFonts w:ascii="${xmlEscape(font)}" w:hAnsi="${xmlEscape(font)}" w:eastAsia="${xmlEscape(font)}"/><w:b/><w:color w:val="${color}"/><w:sz w:val="${fontHalfPoints}"/><w:szCs w:val="${fontHalfPoints}"/></w:rPr><w:t xml:space="preserve">${xmlEscape(field.text || '')}</w:t></w:r>
+              <w:r><w:rPr><w:rFonts w:ascii="${xmlEscape(font)}" w:hAnsi="${xmlEscape(font)}" w:eastAsia="${xmlEscape(font)}"/><w:b/>${charSpacingXml}<w:color w:val="${color}"/><w:sz w:val="${fontHalfPoints}"/><w:szCs w:val="${fontHalfPoints}"/></w:rPr><w:t xml:space="preserve">${xmlEscape(field.text || '')}</w:t></w:r>
             </w:p>
           </w:txbxContent>
         </v:textbox>
@@ -1008,6 +1121,8 @@
     const lineTwips = Math.max(20, Math.round(fontPx * DOCX_PX_TO_PT * 20 * (fit.wrap ? 1.04 : 1.08)));
     const color = String(field.color || '#000000').replace('#','').toUpperCase();
     const font = wordFontName(field.fontFamily);
+    const charSpacingTwips = Math.round(pxToPt(clamp(Number(field.letterSpacing) || 0, -10, 40)) * 20);
+    const charSpacingXml = charSpacingTwips ? `<w:spacing w:val="${charSpacingTwips}"/>` : '';
     const align = wordAlign(field.align, FIELD_LAYOUT[key].defaultAlign);
     const indentTwips = wordIndentTwips(fit, w, align);
     const indentXml = indentTwips ? `<w:ind w:left="${indentTwips}"/>` : '';
@@ -1041,7 +1156,7 @@
                 <w:txbxContent>
                   <w:p>
                     <w:pPr><w:jc w:val="left"/>${indentXml}<w:spacing w:before="0" w:after="0" w:line="${lineTwips}" w:lineRule="exact"/></w:pPr>
-                    <w:r><w:rPr><w:rFonts w:ascii="${xmlEscape(font)}" w:hAnsi="${xmlEscape(font)}" w:eastAsia="${xmlEscape(font)}"/><w:b/><w:color w:val="${color}"/><w:sz w:val="${fontHalfPoints}"/><w:szCs w:val="${fontHalfPoints}"/></w:rPr><w:t xml:space="preserve">${xmlEscape(field.text || '')}</w:t></w:r>
+                    <w:r><w:rPr><w:rFonts w:ascii="${xmlEscape(font)}" w:hAnsi="${xmlEscape(font)}" w:eastAsia="${xmlEscape(font)}"/><w:b/>${charSpacingXml}<w:color w:val="${color}"/><w:sz w:val="${fontHalfPoints}"/><w:szCs w:val="${fontHalfPoints}"/></w:rPr><w:t xml:space="preserve">${xmlEscape(field.text || '')}</w:t></w:r>
                   </w:p>
                 </w:txbxContent>
               </wps:txbx>
@@ -1230,9 +1345,9 @@
     });
 
     if (state.showGuide) {
-      xml += guideRectXml(nextId(), 8, 54, 778, 1, '222222');
+      xml += guideRectXml(nextId(), 8, clamp(Number(state.topFoldY ?? 54), 0, 300), 778, 1, '222222');
       xml += guideRectXml(nextId(), 22, 561, 750, 1, '444444');
-      xml += guideRectXml(nextId(), 8, 1069, 778, 1, '222222');
+      xml += guideRectXml(nextId(), 8, clamp(Number(state.bottomFoldY ?? 1069), 823, 1122), 778, 1, '222222');
     }
     return xml;
   }
@@ -1413,7 +1528,7 @@
         migratedFields.title.align = 'left'; migratedFields.title.x = 0;
         migratedFields.name.align = 'center';
       }
-      state = { ...fresh, ...saved, layoutVersion: 7, fields: migratedFields, batch: state.batch, batchIndex: state.batchIndex };
+      state = { ...fresh, ...saved, layoutVersion: 8, fields: migratedFields, batch: state.batch, batchIndex: state.batchIndex };
       syncAllUI();
       showToast('已載入已存設定');
     } catch(e) { showToast('載入設定失敗', true); }
@@ -1425,6 +1540,7 @@
     $('zoom').addEventListener('input', e => { state.zoom = parseInt(e.target.value,10); renderPreview(); });
 
     const layoutRanges = {
+      topFoldY: [0, 300], bottomFoldY: [823, 1122],
       backgroundScale: [20, 250], backgroundX: [-350, 350], backgroundY: [-240, 240],
       logoWidth: [20, 320], logoX: [-350, 350], logoY: [-240, 240]
     };
@@ -1448,6 +1564,11 @@
       syncLayoutUI();
       renderPreview();
     }));
+
+    $('resetFoldLayout').addEventListener('click', () => {
+      state.topFoldY = 54; state.bottomFoldY = 1069;
+      syncLayoutUI(); renderPreview(); showToast('頂部與底部摺線位置已重設');
+    });
 
     $('backgroundFile').addEventListener('change', e => loadImage(e.target.files[0], src => {
       state.background = src;
