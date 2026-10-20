@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>桌卡製作工具</title>
+  <title>桌卡製作工具 v17｜底圖濃淡調整</title>
   <style>
     :root {
       --bg: #eef6ff;
@@ -122,7 +122,7 @@
   <aside class="controls">
     <div class="header">
       <h1>桌卡製作工具</h1>
-      <p>活動名稱、職稱、姓名可分別調整字型、文字間距、對齊方式、X / Y 位置、大小與顏色；摺線、底圖與 Logo 也可調整位置。</p>
+      <p>活動名稱、職稱、姓名可分別調整字型、文字間距、對齊方式、X / Y 位置、大小與顏色；摺線、底圖與 Logo 也可調整位置，底圖也可調整濃淡。</p>
       <div class="tabs">
         <button class="tab active" data-mode="single">單筆製作</button>
         <button class="tab" data-mode="batch">大量匯入</button>
@@ -185,11 +185,16 @@
         <div class="filebox" style="margin-top:12px;">
           <label class="control-label">單面背景底圖（選填）</label>
           <input id="backgroundFile" type="file" accept="image/*" />
-          <div class="hint">底圖會同步套用到上下兩面。可調整縮放與 X / Y 位置，適合對準公司既有桌卡模板。</div>
+          <div class="hint">底圖會同步套用到上下兩面。可調整縮放、濃淡與 X / Y 位置，適合對準公司既有桌卡模板。</div>
           <div class="row">
             <label>底圖大小</label>
             <input id="backgroundScaleRange" type="range" min="20" max="250" value="100" />
             <div class="nudge"><button class="layout-nudge" data-target="backgroundScale" data-delta="-1">−</button><input id="backgroundScale" class="number-input" type="number" min="20" max="250" /><button class="layout-nudge" data-target="backgroundScale" data-delta="1">＋</button></div>
+          </div>
+          <div class="row">
+            <label>底圖濃淡</label>
+            <input id="backgroundOpacityRange" type="range" min="0" max="100" value="100" />
+            <div class="nudge"><button class="layout-nudge" data-target="backgroundOpacity" data-delta="-1">−</button><input id="backgroundOpacity" class="number-input" type="number" min="0" max="100" /><button class="layout-nudge" data-target="backgroundOpacity" data-delta="1">＋</button></div>
           </div>
           <div class="row">
             <label>水平位置 X</label>
@@ -202,7 +207,7 @@
             <div class="nudge"><button class="layout-nudge" data-target="backgroundY" data-delta="-1">−</button><input id="backgroundY" class="number-input" type="number" min="-240" max="240" /><button class="layout-nudge" data-target="backgroundY" data-delta="1">＋</button></div>
           </div>
           <div class="batch-tools" style="margin-top:10px;margin-bottom:0;">
-            <button class="btn secondary" id="resetBackgroundLayout">重設底圖大小與位置</button>
+            <button class="btn secondary" id="resetBackgroundLayout">重設底圖大小、濃淡與位置</button>
             <button class="btn danger" id="clearBackground">移除底圖</button>
           </div>
         </div>
@@ -303,7 +308,7 @@
     name:  { boxWidth: 660, minSize: 48, allowWrap: false, defaultAlign: 'center' }
   };
   const defaultState = () => ({
-    layoutVersion: 8,
+    layoutVersion: 9,
     mode: 'single',
     fields: {
       event: { text: '', fontFamily: 'kai', size: 38, letterSpacing: 0, color: '#001b72', align: 'left', x: 0, y: 0 },
@@ -315,6 +320,7 @@
     bottomFoldY: 1069,
     background: null,
     backgroundScale: 100,
+    backgroundOpacity: 100,
     backgroundX: 0,
     backgroundY: 0,
     logo: null,
@@ -428,6 +434,8 @@
       bg.src = state.background;
       bg.alt = '';
       bg.style.width = `${clamp(Number(state.backgroundScale) || 100, 20, 250)}%`;
+      const bgOpacity = Number.isFinite(Number(state.backgroundOpacity)) ? Number(state.backgroundOpacity) : 100;
+      bg.style.opacity = `${clamp(bgOpacity, 0, 100) / 100}`;
       bg.style.transform = `translate(-50%, -50%) translate(${Number(state.backgroundX) || 0}px, ${Number(state.backgroundY) || 0}px)`;
       face.appendChild(bg);
     }
@@ -717,6 +725,7 @@
       topFoldY: clamp(Number(state.topFoldY ?? 54), 0, 300),
       bottomFoldY: clamp(Number(state.bottomFoldY ?? 1069), 823, 1122),
       backgroundScale: clamp(Number(state.backgroundScale) || 100, 20, 250),
+      backgroundOpacity: clamp(Number.isFinite(Number(state.backgroundOpacity)) ? Number(state.backgroundOpacity) : 100, 0, 100),
       backgroundX: clamp(Number(state.backgroundX) || 0, -350, 350),
       backgroundY: clamp(Number(state.backgroundY) || 0, -240, 240),
       logoWidth: clamp(Number(state.logoWidth) || 110, 20, 320),
@@ -1273,7 +1282,7 @@
     return { x: DOCX_FACE.width / 2 + dx - w / 2, y: DOCX_FACE.height / 2 + dy - h / 2, w, h };
   }
 
-  function imageDataToPng(dataUrl) {
+  function imageDataToPng(dataUrl, opacity=1) {
     if (!dataUrl) return Promise.resolve(null);
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -1284,7 +1293,9 @@
           canvas.height = Math.max(1, img.naturalHeight || img.height || 1);
           const ctx = canvas.getContext('2d');
           ctx.clearRect(0,0,canvas.width,canvas.height);
+          ctx.globalAlpha = Math.max(0, Math.min(1, Number(opacity) || 0));
           ctx.drawImage(img,0,0);
+          ctx.globalAlpha = 1;
           const png = canvas.toDataURL('image/png');
           resolve({ base64: png.split(',')[1], width: canvas.width, height: canvas.height });
         } catch (e) { reject(e); }
@@ -1426,8 +1437,8 @@
   async function buildEditableDocxBlob(pages) {
     if (!window.JSZip) throw new Error('JSZip 尚未載入');
     const [background, logo] = await Promise.all([
-      imageDataToPng(state.background),
-      imageDataToPng(state.logo)
+      imageDataToPng(state.background, clamp(Number.isFinite(Number(state.backgroundOpacity)) ? Number(state.backgroundOpacity) : 100, 0, 100) / 100),
+      imageDataToPng(state.logo, 1)
     ]);
     let relNum = 3;
     const resources = {
@@ -1528,7 +1539,7 @@
         migratedFields.title.align = 'left'; migratedFields.title.x = 0;
         migratedFields.name.align = 'center';
       }
-      state = { ...fresh, ...saved, layoutVersion: 8, fields: migratedFields, batch: state.batch, batchIndex: state.batchIndex };
+      state = { ...fresh, ...saved, layoutVersion: 9, fields: migratedFields, batch: state.batch, batchIndex: state.batchIndex };
       syncAllUI();
       showToast('已載入已存設定');
     } catch(e) { showToast('載入設定失敗', true); }
@@ -1541,7 +1552,7 @@
 
     const layoutRanges = {
       topFoldY: [0, 300], bottomFoldY: [823, 1122],
-      backgroundScale: [20, 250], backgroundX: [-350, 350], backgroundY: [-240, 240],
+      backgroundScale: [20, 250], backgroundOpacity: [0, 100], backgroundX: [-350, 350], backgroundY: [-240, 240],
       logoWidth: [20, 320], logoX: [-350, 350], logoY: [-240, 240]
     };
     Object.entries(layoutRanges).forEach(([key, [min, max]]) => {
@@ -1577,8 +1588,8 @@
     }, '底圖', 8));
     $('clearBackground').addEventListener('click', () => { state.background = null; $('backgroundFile').value=''; renderPreview(); });
     $('resetBackgroundLayout').addEventListener('click', () => {
-      state.backgroundScale = 100; state.backgroundX = 0; state.backgroundY = 0;
-      syncLayoutUI(); renderPreview(); showToast('底圖大小與位置已重設');
+      state.backgroundScale = 100; state.backgroundOpacity = 100; state.backgroundX = 0; state.backgroundY = 0;
+      syncLayoutUI(); renderPreview(); showToast('底圖大小、濃淡與位置已重設');
     });
 
     $('logoFile').addEventListener('change', e => loadImage(e.target.files[0], src => {
